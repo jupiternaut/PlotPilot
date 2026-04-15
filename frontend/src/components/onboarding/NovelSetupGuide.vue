@@ -263,20 +263,16 @@
     </div>
 
     <template #footer>
-      <n-space justify="space-between" align="center">
-        <!-- 左侧：返回上一步 -->
+      <n-space justify="space-between" style="width: 100%">
         <div class="footer-left">
-          <n-button v-if="currentStep > 1 && currentStep < 6" quaternary @click="handlePrev">
+          <n-button v-if="currentStep > 1 && currentStep < 6" @click="handlePrev">
             返回上一步
           </n-button>
         </div>
-
-        <!-- 右侧：跳转或进行下一步 -->
-        <n-space align="center">
-          <n-button v-if="currentStep > 3 && currentStep < 6" quaternary @click="handleSkip">
+        <n-space class="footer-right">
+          <n-button v-if="currentStep > 3 && currentStep < 6" @click="handleSkip">
             跳过向导
           </n-button>
-          
           <n-button
             v-if="(currentStep === 1 && bibleGenerated) || (currentStep === 2 && charactersGenerated) || (currentStep === 3 && locationsGenerated)"
             type="primary"
@@ -718,10 +714,12 @@ watch(currentStep, (step) => {
 
 const handleNext = async () => {
   if (currentStep.value === 1) {
+    if (bibleGenerated.value) {
+      currentStep.value = 2
+      return
+    }
     // 进入第2步：生成人物
     currentStep.value = 2
-    if (charactersGenerated.value) return 
-
     generatingCharacters.value = true
     try {
       await bibleApi.generateBible(props.novelId, 'characters')
@@ -742,10 +740,12 @@ const handleNext = async () => {
       generatingCharacters.value = false
     }
   } else if (currentStep.value === 2) {
+    if (charactersGenerated.value) {
+      currentStep.value = 3
+      return
+    }
     // 进入第3步：生成地点
     currentStep.value = 3
-    if (locationsGenerated.value) return
-
     generatingLocations.value = true
     try {
       await bibleApi.generateBible(props.novelId, 'locations')
@@ -778,9 +778,9 @@ const handlePrev = () => {
 
 const handleSkip = () => {
   dialog.warning({
-    title: '确认退出向导？',
-    content: '当前设置进度将不会保存。您可以在之后通过左侧菜单重新开启向导。',
-    positiveText: '确认退出',
+    title: '确认跳过？',
+    content: '跳过向导将直接进入工作台，你可以在后续随时手动补全设定。',
+    positiveText: '确认跳过',
     negativeText: '取消',
     onPositiveClick: () => {
       emit('skip')
@@ -791,10 +791,10 @@ const handleSkip = () => {
 
 const requestClose = () => {
   dialog.warning({
-    title: '确认退出向导？',
-    content: '当前设置进度将不会保存。您可以在之后从左侧菜单重新开启向导。',
+    title: '确认退出？',
+    content: '当前向导进度将不会保存，确认要退出吗？',
     positiveText: '确认退出',
-    negativeText: '取消',
+    negativeText: '我再想想',
     onPositiveClick: () => {
       emit('update:show', false)
     },
