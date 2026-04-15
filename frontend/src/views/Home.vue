@@ -538,11 +538,6 @@ const handleCreate = async () => {
     return
   }
 
-/** 打开提示词广场 */
-function openPromptPlaza() {
-  promptPlazaRef.value?.open()
-}
-
   creating.value = true
   try {
     const title = newBook.value.title || newBook.value.premise.substring(0, 20)
@@ -1042,12 +1037,6 @@ onMounted(() => {
   flex: 1;
 }
 
-<<<<<<< HEAD
-.book-chapters,
-.book-words {
-  font-size: 12px;
-  color: var(--app-text-muted);
-=======
 /* 卡片操作按钮 */
 .card-actions {
   display: flex;
@@ -1079,7 +1068,6 @@ onMounted(() => {
 .fold-hint {
   font-size: 13px;
   color: var(--app-text-secondary);
->>>>>>> upstream/master
 }
 
 @keyframes fade-up {

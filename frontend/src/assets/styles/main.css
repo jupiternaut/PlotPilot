@@ -166,6 +166,7 @@ body {
   --tab-active-color: var(--app-text-inverse, #ffffff);
   --tab-inactive-color: var(--app-text-secondary, #94a3b8);
   --tab-inactive-hover-color: var(--app-text-primary, #e2e8f0);
+
   /* ── 背景色（深色系，禁止纯白）── */
   --app-page-bg: #0b1121;
   --app-surface: #131c31;
@@ -253,10 +254,7 @@ body {
   --stats-bar-gradient: linear-gradient(135deg, #141210 0%, #1c1812 25%, #201a12 50%, #161310 75%, #0e0c09 100%),
     linear-gradient(90deg, transparent 95%, rgba(212, 168, 67, 0.08) 100%);
 
-  /* 黑金模式头部组件额外适配 */
-  --tab-track-bg: linear-gradient(135deg, var(--color-brand), #8f741d);
-  --tab-active-color: #0a0c10;
-  --runtime-model-color: var(--color-gold);
+  /* 黑金模式顶部栏额外装饰：金色底边线 */
   --stats-bar-border-bottom: 1px solid rgba(212, 168, 67, 0.18);
 
   color-scheme: dark;
@@ -429,23 +427,22 @@ rt { font-size: 0.6em; color: var(--app-text-muted); }
 .global-llm-drawer-title { color: var(--app-text-primary); }
 .global-llm-drawer-subtitle { color: var(--app-text-muted); }
 .global-llm-runtime-bar {
-  background: var(--runtime-bar-bg, var(--app-surface-subtle));
-  border-color: var(--runtime-bar-border, var(--app-border));
+  background: var(--runtime-bar-bg);
+  border-color: var(--runtime-bar-border);
 }
-.global-llm-runtime-model { color: var(--runtime-model-color, var(--color-brand)); font-weight: 800; }
+.global-llm-runtime-model { color: var(--runtime-model-color); font-weight: 800; }
 .global-llm-runtime-label { color: var(--app-text-muted); }
 .global-llm-runtime-name { color: var(--app-text-secondary); }
 .global-llm-runtime-chip {
   background: var(--color-brand-light);
   color: var(--color-brand);
 }
-
 .global-llm-runtime-bar.is-mock {
-  background: var(--runtime-mock-bg, var(--app-surface-raised));
-  border-color: var(--runtime-mock-border, var(--app-border-strong));
+  background: var(--runtime-mock-bg);
+  border-color: var(--runtime-mock-border);
 }
 .global-llm-runtime-bar.is-mock .global-llm-runtime-model {
-  color: var(--runtime-mock-model-color, var(--color-gold));
+  color: var(--runtime-mock-model-color);
 }
 
 /* 嵌入模型区域 */

@@ -621,15 +621,6 @@ function openPanel() {
   gap: 12px;
   padding: 12px 14px;
   border-radius: var(--app-radius-lg);
-<<<<<<< HEAD
-  background: linear-gradient(135deg, var(--color-brand-light), var(--color-brand-light)), var(--app-surface);
-  border: 1px solid var(--color-brand-border);
-}
-
-.global-llm-runtime-bar.is-mock {
-  background: linear-gradient(135deg, var(--color-gold-dim), var(--color-gold-dim)), var(--app-surface);
-  border-color: var(--color-gold-border);
-=======
   background: var(--runtime-bar-bg, linear-gradient(135deg, var(--color-brand-light), var(--app-surface)));
   border: 1px solid var(--runtime-bar-border, var(--color-brand-border));
 }
@@ -641,7 +632,6 @@ function openPanel() {
 
 .global-llm-runtime-bar.is-mock .global-llm-runtime-model {
   color: var(--runtime-mock-model-color, var(--color-gold));
->>>>>>> upstream/master
 }
 
 .global-llm-runtime-main {
@@ -662,7 +652,6 @@ function openPanel() {
   font-weight: 800;
   line-height: 1.25;
   color: var(--runtime-model-color, var(--color-brand));
-}
 }
 
 .global-llm-runtime-meta {
