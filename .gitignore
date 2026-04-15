@@ -75,7 +75,7 @@ scripts/evaluation/results/
 # Data directory (keep structure, ignore content)
 data/chromadb/
 data/logs/
-data/config.json
+data/llm_configs.json
 
 # Local Large Model Files
 models/
