@@ -8,6 +8,12 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# 处理 Windows 终端编码问题
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 print("=" * 60)
 print("使用 ModelScope 下载本地向量模型")
 print("=" * 60)

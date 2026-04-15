@@ -75,3 +75,10 @@ scripts/evaluation/results/
 # Data directory (keep structure, ignore content)
 data/chromadb/
 data/logs/
+data/config.json
+
+# Local Large Model Files
+models/
+
+# AI Assistant Scratch Directory
+scratch/

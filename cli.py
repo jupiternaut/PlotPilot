@@ -21,10 +21,9 @@ def main(args=None):
 
     if parsed_args.command == 'serve':
         import uvicorn
-        from .interfaces.main import app
 
         uvicorn.run(
-            app,
+            "interfaces.main:app",
             host=parsed_args.host,
             port=parsed_args.port,
             reload=parsed_args.reload
