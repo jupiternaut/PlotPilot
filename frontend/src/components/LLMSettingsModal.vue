@@ -80,6 +80,18 @@ const themeOptions = computed(() => [
     icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26"><defs><linearGradient id="ag" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d4a843"/><stop offset="100%" stop-color="#f5d485"/></linearGradient></defs><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#ag)"/></svg>',
   },
   {
+    value: 'ink' as ThemeMode,
+    label: '墨枢',
+    desc: '墨色沉边，如砚中深潭',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="9" fill="url(#inkGrad)"/><defs><linearGradient id="inkGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1a1a1a"/><stop offset="100%" stop-color="#4a4a4a"/></linearGradient></defs></svg>',
+  },
+  {
+    value: 'cinnabar' as ThemeMode,
+    label: '朱砂',
+    desc: '古韵朱红，醒目不刺目',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="9" fill="url(#cinGrad)"/><defs><linearGradient id="cinGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#b22222"/><stop offset="100%" stop-color="#ff4500"/></linearGradient></defs></svg>',
+  },
+  {
     value: 'auto' as ThemeMode,
     label: '跟随系统',
     desc: '自动匹配操作系统偏好设置',

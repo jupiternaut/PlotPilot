@@ -494,7 +494,6 @@ const inferAll = async () => {
   try {
     const res = await knowledgeGraphApi.inferNovel(props.slug)
     message.success('全书推断完成')
-    console.log('推断结果:', res.data)
     await loadTriples()
   } catch {
     message.error('推断失败')
@@ -761,7 +760,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   padding: 12px 12px 8px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background: linear-gradient(180deg, var(--app-surface-subtle) 0%, var(--app-border) 100%);
 }
 
 .kp-hero {
@@ -859,7 +858,7 @@ onUnmounted(() => {
 }
 
 .kp-section-icon {
-  color: #94a3b8;
+  color: var(--app-text-secondary, #94a3b8);
   font-size: 12px;
 }
 
@@ -889,7 +888,7 @@ onUnmounted(() => {
 }
 
 .kp-card-premise {
-  background: #fff;
+  background: var(--app-surface);
   border: 1px solid rgba(15, 23, 42, 0.06) !important;
 }
 
@@ -905,7 +904,7 @@ onUnmounted(() => {
 }
 
 .kp-ch-card {
-  background: #fff;
+  background: var(--app-surface);
   border: 1px solid rgba(15, 23, 42, 0.07) !important;
   overflow: hidden;
 }
@@ -1062,7 +1061,7 @@ onUnmounted(() => {
 }
 
 .kp-search-card {
-  background: #fff;
+  background: var(--app-surface);
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 12px;
   flex-shrink: 0;
@@ -1073,7 +1072,7 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--app-surface);
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 12px;
   overflow: hidden;

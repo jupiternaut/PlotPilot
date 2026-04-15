@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 
-export type ThemeMode = 'light' | 'dark' | 'anchor' | 'auto'
+export type ThemeMode = 'light' | 'dark' | 'anchor' | 'auto' | 'ink' | 'cinnabar'
 
 const STORAGE_KEY = 'aitext-theme-mode'
 

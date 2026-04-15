@@ -25,6 +25,7 @@ build/
 # Local agent / MCP caches (do not commit)
 .playwright-mcp/
 .claude/
+.trae/
 
 # Coverage / test artifacts
 .coverage
@@ -77,8 +78,15 @@ data/chromadb/
 data/logs/
 data/llm_configs.json
 
+<<<<<<< HEAD
 # Local Large Model Files
 models/
 
 # AI Assistant Scratch Directory
 scratch/
+=======
+
+PlotPilot-master
+
+llm_profiles.json
+>>>>>>> upstream/master
