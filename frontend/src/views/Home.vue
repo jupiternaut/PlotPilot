@@ -735,8 +735,6 @@ onMounted(() => {
   right: 0;
   width: 40px;
   height: 40px;
-  border: none;
-  background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 10px;
   cursor: pointer;
@@ -816,9 +814,9 @@ onMounted(() => {
 
 .advanced-settings {
   padding: 16px;
-  background: rgba(79, 70, 229, 0.04);
+  background: var(--color-brand-light);
   border-radius: 12px;
-  border: 1px solid rgba(79, 70, 229, 0.1);
+  border: 1px solid var(--color-brand-border);
 }
 
 .w-full {

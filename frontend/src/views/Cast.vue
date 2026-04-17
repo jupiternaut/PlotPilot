@@ -512,8 +512,8 @@ onUnmounted(() => {
   margin-bottom: 10px;
   padding: 8px;
   border-radius: 8px;
-  background: rgba(79, 70, 229, 0.05);
-  border: 1px solid rgba(99, 102, 241, 0.12);
+  background: var(--color-brand-light);
+  border: 1px solid var(--color-brand-border);
 }
 
 .ev-id {

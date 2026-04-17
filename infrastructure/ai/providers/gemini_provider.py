@@ -1,4 +1,4 @@
-"""Gemini LLM 提供商实现（基于 httpx 的 REST API 实现，深度整合 SOCKS5H 代理补丁）"""
+"""Gemini LLM 提供商实现（基于 httpx 的 REST API 实现，深度整合标准化 Transport 代理）"""
 from __future__ import annotations
 
 import json
@@ -24,9 +24,9 @@ class GeminiProvider(BaseProvider):
     """Google Gemini LLM 提供商实现
     
     加固策略：
-    1. 采用 httpx REST 实现，对齐上游架构。
-    2. 强制注入 SOCKS5H 代理，解决国内环境握手失败。
-    3. 支持 Pydantic Schema 校验，确保生成内容 100% 结构化。
+    1. 采用 httpx.AsyncHTTPTransport 显式配置代理。
+    2. 锁定 127.0.0.1:10808 作为混合代理通道。
+    3. 支持 Pydantic Schema 校验，确保生成内容结构化。
     """
     def __init__(self, settings: Settings):
         super().__init__(settings)
@@ -34,16 +34,12 @@ class GeminiProvider(BaseProvider):
             raise ValueError('API key is required for GeminiProvider')
         self.base_url = (settings.base_url or DEFAULT_BASE_URL).rstrip('/')
         
-        # 强制环境变量以加固网络环境 (httpx 会读取这些变量)
+        # 强制环境变量以加固网络环境
         os.environ["HTTPX_HTTP2"] = "0"
-
-    def _get_proxy_mounts(self) -> dict[str, str]:
-        """返回代理配置，用于 httpx mounts"""
-        proxy_url = "socks5h://127.0.0.1:10808"
-        return {
-            "http://": proxy_url,
-            "https://": proxy_url,
-        }
+        
+        # 预构标准传输层：锁定 10808 端口
+        self.proxy_url = "http://127.0.0.1:10808"
+        self._transport = httpx.AsyncHTTPTransport(proxy=self.proxy_url)
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
         payload = self._build_payload(prompt, config)
@@ -51,8 +47,9 @@ class GeminiProvider(BaseProvider):
         url = self._build_url(config.model or self.settings.default_model or DEFAULT_MODEL, 'generateContent')
         timeout = httpx.Timeout(self.settings.timeout_seconds)
 
-        # 注入 SOCKS5H 代理加固
-        async with httpx.AsyncClient(timeout=timeout, mounts=self._get_proxy_mounts()) as client:
+        # 使用预构的传输层，物理性消除 str 对象的 Attribute 报错
+        async with httpx.AsyncClient(transport=self._transport, timeout=timeout) as client:
+            logger.info(f"Final Gemini API Request URL: {url}")
             response = await client.post(
                 url,
                 params=query,
@@ -66,7 +63,7 @@ class GeminiProvider(BaseProvider):
         if not content.strip():
             raise RuntimeError('Gemini returned empty content')
 
-        # 结构化输出校验 (Pydantic 补丁回归)
+        # 结构化输出校验
         target_schema = config.response_format
         if target_schema and isinstance(target_schema, type) and issubclass(target_schema, BaseModel):
             try:
@@ -88,7 +85,7 @@ class GeminiProvider(BaseProvider):
         url = self._build_url(config.model or self.settings.default_model or DEFAULT_MODEL, 'streamGenerateContent')
         timeout = httpx.Timeout(self.settings.timeout_seconds)
 
-        async with httpx.AsyncClient(timeout=timeout, mounts=self._get_proxy_mounts()) as client:
+        async with httpx.AsyncClient(transport=self._transport, timeout=timeout) as client:
             async with client.stream(
                 'POST',
                 url,
@@ -107,8 +104,13 @@ class GeminiProvider(BaseProvider):
                             yield text
 
     def _build_url(self, model: str, action: str) -> str:
-        model_name = model.strip() or DEFAULT_MODEL
-        return f'{self.base_url}/models/{model_name}:{action}'
+        # 强制主权校准：锁定官方最稳型号
+        model_name = 'gemini-1.5-flash' 
+        # 协议补全：确保必须包含版本号，否则会触发 404
+        base = self.base_url
+        if '/v1' not in base:
+            base = f"{base.rstrip('/')}/v1beta"
+        return f'{base}/models/{model_name}:{action}'
 
     def _build_query(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
         query: dict[str, Any] = {'key': self.settings.api_key}
@@ -130,7 +132,6 @@ class GeminiProvider(BaseProvider):
             'maxOutputTokens': config.max_tokens,
         }
         
-        # 安全设置：作者最新架构倾向于 BLOCK_NONE 确保创作自由
         safety_settings = [
             {'category': cat, 'threshold': 'BLOCK_NONE'}
             for cat in [
@@ -150,7 +151,6 @@ class GeminiProvider(BaseProvider):
             'safetySettings': safety_settings,
         }
 
-        # 结构化输出支持
         if config.response_format:
             payload['generationConfig']['responseMimeType'] = 'application/json'
 

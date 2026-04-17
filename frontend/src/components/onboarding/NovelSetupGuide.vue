@@ -257,7 +257,7 @@
           </n-icon>
           <h3>准备就绪！</h3>
           <p>所有基础设置已完成，现在可以开始创作了。</p>
-          <p style="margin-top: 12px; color: #666">您可以随时在工作台的"设置"面板中调整这些内容。</p>
+          <p style="margin-top: 12px; color: var(--app-text-muted)">您可以随时在工作台的"设置"面板中调整这些内容。</p>
         </div>
       </div>
     </div>
@@ -835,7 +835,7 @@ const handleComplete = () => {
 }
 
 .step-info p {
-  color: #666;
+  color: var(--app-text-muted);
   line-height: 1.6;
   margin: 8px 0;
 }
@@ -863,7 +863,7 @@ const handleComplete = () => {
 .plot-line {
   font-size: 13px;
   line-height: 1.55;
-  color: #555;
+  color: var(--app-text-secondary);
   text-align: left;
 }
 

@@ -81,7 +81,7 @@ const themeOptions = computed(() => [
   },
   {
     value: 'ink' as ThemeMode,
-    label: '墨枢',
+    label: '玄墨',
     desc: '墨色沉边，如砚中深潭',
     icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="9" fill="url(#inkGrad)"/><defs><linearGradient id="inkGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1a1a1a"/><stop offset="100%" stop-color="#4a4a4a"/></linearGradient></defs></svg>',
   },
@@ -221,17 +221,17 @@ function handleThemeChange(newMode: ThemeMode) {
 }
 
 .theme-mode-card:hover {
-  border-color: #a5b4fc;
-  background: rgba(79, 70, 229, 0.02);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
+  border-color: var(--color-brand-suppl, #a5b4fc);
+  background: var(--color-brand-light);
+  box-shadow: 0 2px 8px var(--app-shadow-sm);
 }
 
 .theme-mode-card.active {
-  border-color: #4f46e5;
-  background: rgba(79, 70, 229, 0.05);
+  border-color: var(--color-brand);
+  background: var(--color-brand-light);
   box-shadow:
-    0 0 0 3px rgba(79, 70, 229, 0.08),
-    0 2px 8px rgba(79, 70, 229, 0.1);
+    0 0 0 3px var(--color-brand-light),
+    0 2px 8px var(--color-brand-border);
 }
 
 /* 黑金模式激活态：金色光晕 */
@@ -257,13 +257,13 @@ function handleThemeChange(newMode: ThemeMode) {
 }
 
 .theme-mode-card.active .mode-card-icon {
-  background: rgba(79, 70, 229, 0.1);
-  border-color: rgba(79, 70, 229, 0.2);
+  background: var(--color-brand-light);
+  border-color: var(--color-brand-border);
 }
 
 .theme-mode-card.active[data-mode="anchor"] .mode-card-icon {
-  background: rgba(212, 168, 67, 0.1);
-  border-color: rgba(212, 168, 67, 0.25);
+  background: var(--color-anchor-dim);
+  border-color: var(--color-anchor-border);
 }
 
 .mode-card-info {
