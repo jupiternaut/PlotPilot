@@ -19,7 +19,7 @@
 
     <div class="step-content">
       <!-- Step 1: Generate Worldbuilding + Style -->
-      <div v-if="currentStep === 1" class="step-panel">
+      <div v-if="currentStep === 1" key="step1" class="step-panel">
         <n-alert v-if="bibleError" type="error" :title="bibleError" style="margin-bottom: 16px" />
         <n-spin :show="generatingBible">
           <div v-if="!bibleGenerated" class="step-info">
@@ -89,7 +89,7 @@
       </div>
 
       <!-- Step 2: Generate Characters -->
-      <div v-else-if="currentStep === 2" class="step-panel">
+      <div v-else-if="currentStep === 2" key="step2" class="step-panel">
         <n-spin :show="generatingCharacters">
           <div v-if="!charactersGenerated" class="step-info">
             <n-icon size="48" color="#2080f0">
@@ -105,11 +105,11 @@
               请查看并确认角色设定。
             </n-alert>
 
-            <n-list bordered>
-              <n-list-item v-for="char in bibleData.characters" :key="char.name">
-                <n-thing :title="char.name" :description="char.description">
+            <n-list bordered v-if="bibleData?.characters">
+              <n-list-item v-for="(char, index) in bibleData.characters" :key="char.id || index">
+                <n-thing :title="char.name || '未知人物'" :description="char.description">
                   <template #header-extra>
-                    <n-tag size="small">{{ char.role }}</n-tag>
+                    <n-tag size="small" type="primary">{{ char.role || '主要角色' }}</n-tag>
                   </template>
                 </n-thing>
               </n-list-item>
@@ -119,7 +119,7 @@
       </div>
 
       <!-- Step 3: Generate Locations -->
-      <div v-else-if="currentStep === 3" class="step-panel">
+      <div v-else-if="currentStep === 3" key="step3" class="step-panel">
         <n-spin :show="generatingLocations">
           <div v-if="!locationsGenerated" class="step-info">
             <n-icon size="48" color="#f0a020">
@@ -135,10 +135,10 @@
               请查看并确认地点设定。
             </n-alert>
 
-            <BibleLocationsGraphPreview :locations="bibleData.locations || []" />
-            <n-list bordered style="margin-top: 16px">
-              <n-list-item v-for="loc in bibleData.locations" :key="loc.id || loc.name">
-                <n-thing :title="loc.name" :description="loc.description">
+            <BibleLocationsGraphPreview :locations="bibleData?.locations || []" />
+            <n-list bordered style="margin-top: 16px" v-if="bibleData?.locations">
+              <n-list-item v-for="(loc, index) in bibleData.locations" :key="loc.id || index">
+                <n-thing :title="loc.name || '未知地点'" :description="loc.description">
                   <template #header-extra>
                     <n-tag size="small" type="info">{{ loc.location_type || '地点' }}</n-tag>
                   </template>
@@ -150,7 +150,7 @@
       </div>
 
       <!-- Step 4: 主线候选（LLM 推演） -->
-      <div v-else-if="currentStep === 4" class="step-panel step-panel--storyline">
+      <div v-else-if="currentStep === 4" key="step4" class="step-panel step-panel--storyline">
         <div class="step-info step-info--wide">
           <n-icon size="48" color="#2080f0">
             <IconTimeline />
@@ -232,7 +232,7 @@
       </div>
 
       <!-- Step 5: Plot Arc -->
-      <div v-else-if="currentStep === 5" class="step-panel">
+      <div v-else-if="currentStep === 5" key="step5" class="step-panel">
         <div class="step-info">
           <n-icon size="48" color="#f0a020">
             <IconChart />
@@ -250,7 +250,7 @@
       </div>
 
       <!-- Step 6: Complete -->
-      <div v-else-if="currentStep === 6" class="step-panel">
+      <div v-else-if="currentStep === 6" key="step6" class="step-panel">
         <div class="step-info">
           <n-icon size="48" color="#18a058">
             <IconCheck />
@@ -485,10 +485,54 @@ const styleConventionDisplay = computed(() => styleConventionFromBible(bibleData
 // 第2步：生成人物和地点
 const generatingCharacters = ref(false)
 const charactersGenerated = ref(false)
+const characterPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 // 第3步：生成地点
 const generatingLocations = ref(false)
 const locationsGenerated = ref(false)
+const locationPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+/**
+ * 核心：同步当前小说的生成状态
+ * 检查是否已有世界观、人物、地点，刷新 UI 状态
+ */
+async function syncGenerationState() {
+  if (!props.novelId || !props.show) return
+
+  try {
+    const bible = await bibleApi.getBible(props.novelId)
+    bibleData.value = bible
+
+    // 1. 检查世界观
+    const hasWb = bible.world_settings && bible.characters.length === 0 && bible.locations.length === 0
+    // 虽然逻辑上 characters 和 locations 也是 Bible 的一部分，但我们这里主要看是否存在核心设定
+    if (bible.world_settings && bible.world_settings.length > 0) {
+      bibleGenerated.value = true
+      // 加载世界观展示数据
+      let fromApi = emptyWorldbuildingShape()
+      try {
+        const w = await worldbuildingApi.getWorldbuilding(props.novelId)
+        fromApi = normalizeWorldbuildingFromApi(w as unknown as Record<string, unknown>)
+      } catch { /* ignore */ }
+      const fromWs = worldbuildingFromWorldSettings(bible.world_settings)
+      worldbuildingData.value = mergeWorldbuildingDisplay(fromApi, fromWs)
+    }
+
+    // 2. 检查人物
+    if (bible.characters && bible.characters.length > 0) {
+      charactersGenerated.value = true
+      generatingCharacters.value = false
+    }
+
+    // 3. 检查地点
+    if (bible.locations && bible.locations.length > 0) {
+      locationsGenerated.value = true
+      generatingLocations.value = false
+    }
+  } catch (error) {
+    console.warn('[NovelSetupGuide] Failed to sync state:', error)
+  }
+}
 
 // Step 4：主线推演
 const plotOptions = ref<MainPlotOptionDTO[]>([])
@@ -586,6 +630,14 @@ function clearGenerationTimers() {
     clearTimeout(timeoutTimerRef.value)
     timeoutTimerRef.value = null
   }
+  if (characterPollTimer.value != null) {
+    clearTimeout(characterPollTimer.value)
+    characterPollTimer.value = null
+  }
+  if (locationPollTimer.value != null) {
+    clearTimeout(locationPollTimer.value)
+    locationPollTimer.value = null
+  }
 }
 
 onUnmounted(() => {
@@ -674,7 +726,7 @@ async function startBibleGeneration() {
       clearGenerationTimers()
       generatingBible.value = false
       bibleError.value = '生成超时，请稍后在工作台手动重试'
-    }, 120000)
+    }, 300000) // 延长至 5 分钟
 
     schedulePoll(0)
   } catch (error: unknown) {
@@ -687,7 +739,7 @@ async function startBibleGeneration() {
 
 watch(
   () => props.show,
-  (val) => {
+  async (val) => {
     if (val) {
       currentStep.value = 1
       stepStatus.value = 'process'
@@ -696,7 +748,14 @@ watch(
       customMode.value = false
       customLogline.value = ''
       plotSuggestError.value = ''
-      void startBibleGeneration()
+      
+      // 首先同步状态，看是否已经生成过
+      await syncGenerationState()
+      
+      // 只有在完全没有生成过世界观时才启动自动生成
+      if (!bibleGenerated.value && !generatingBible.value) {
+        void startBibleGeneration()
+      }
     } else {
       biblePollEpoch.value += 1
       clearGenerationTimers()
@@ -714,56 +773,78 @@ watch(currentStep, (step) => {
 
 const handleNext = async () => {
   if (currentStep.value === 1) {
-    if (bibleGenerated.value) {
-      currentStep.value = 2
-      return
-    }
     // 进入第2步：生成人物
     currentStep.value = 2
-    generatingCharacters.value = true
-    try {
-      await bibleApi.generateBible(props.novelId, 'characters')
-      // 轮询检查人物生成状态
-      const checkCharacters = async () => {
-        const bible = await bibleApi.getBible(props.novelId)
-        bibleData.value = bible
-        if (bible.characters && bible.characters.length > 0) {
-          generatingCharacters.value = false
-          charactersGenerated.value = true
-        } else {
-          window.setTimeout(checkCharacters, 2000)
+    if (!charactersGenerated.value && !generatingCharacters.value) {
+      generatingCharacters.value = true
+      try {
+        console.log('[NovelSetupGuide] Starting character generation...')
+        await bibleApi.generateBible(props.novelId, 'characters')
+        
+        // 轮询逻辑
+        const poll = async () => {
+          if (!generatingCharacters.value) return
+          try {
+            console.log(`[NovelSetupGuide] Polling characters for novel: ${props.novelId}`)
+            const bible = await bibleApi.getBible(props.novelId)
+            console.log('[NovelSetupGuide] Characters poll response:', bible.characters?.length)
+            
+            if (bible.characters && bible.characters.length > 0) {
+              bibleData.value = bible
+              generatingCharacters.value = false
+              charactersGenerated.value = true
+              message.success('人物生成完成')
+            } else {
+              characterPollTimer.value = window.setTimeout(poll, 2000)
+            }
+          } catch (e) {
+            console.warn('[NovelSetupGuide] Character poll failed:', e)
+            characterPollTimer.value = window.setTimeout(poll, 3000)
+          }
         }
+        void poll()
+      } catch (error) {
+        console.error('Failed to start character generation:', error)
+        generatingCharacters.value = false
+        message.error('启动人物生成失败')
       }
-      await checkCharacters()
-    } catch (error) {
-      console.error('Failed to generate characters:', error)
-      generatingCharacters.value = false
     }
   } else if (currentStep.value === 2) {
-    if (charactersGenerated.value) {
-      currentStep.value = 3
-      return
-    }
     // 进入第3步：生成地点
     currentStep.value = 3
-    generatingLocations.value = true
-    try {
-      await bibleApi.generateBible(props.novelId, 'locations')
-      // 轮询检查地点生成状态
-      const checkLocations = async () => {
-        const bible = await bibleApi.getBible(props.novelId)
-        bibleData.value = bible
-        if (bible.locations && bible.locations.length > 0) {
-          generatingLocations.value = false
-          locationsGenerated.value = true
-        } else {
-          window.setTimeout(checkLocations, 2000)
+    if (!locationsGenerated.value && !generatingLocations.value) {
+      generatingLocations.value = true
+      try {
+        console.log('[NovelSetupGuide] Starting location generation...')
+        await bibleApi.generateBible(props.novelId, 'locations')
+        
+        // 轮询逻辑
+        const poll = async () => {
+          if (!generatingLocations.value) return
+          try {
+            console.log(`[NovelSetupGuide] Polling locations for novel: ${props.novelId}`)
+            const bible = await bibleApi.getBible(props.novelId)
+            console.log('[NovelSetupGuide] Locations poll response:', bible.locations?.length)
+            
+            if (bible.locations && bible.locations.length > 0) {
+              bibleData.value = bible
+              generatingLocations.value = false
+              locationsGenerated.value = true
+              message.success('地图生成完成')
+            } else {
+              locationPollTimer.value = window.setTimeout(poll, 2000)
+            }
+          } catch (e) {
+            console.warn('[NovelSetupGuide] Location poll failed:', e)
+            locationPollTimer.value = window.setTimeout(poll, 3000)
+          }
         }
+        void poll()
+      } catch (error) {
+        console.error('Failed to start location generation:', error)
+        generatingLocations.value = false
+        message.error('启动地点生成失败')
       }
-      await checkLocations()
-    } catch (error) {
-      console.error('Failed to generate locations:', error)
-      generatingLocations.value = false
     }
   } else if (currentStep.value < 6) {
     currentStep.value++

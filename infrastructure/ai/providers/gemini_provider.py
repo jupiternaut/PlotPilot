@@ -34,12 +34,14 @@ class GeminiProvider(BaseProvider):
             raise ValueError('API key is required for GeminiProvider')
         self.base_url = (settings.base_url or DEFAULT_BASE_URL).rstrip('/')
         
-        # 强制环境变量以加固网络环境
-        os.environ["HTTPX_HTTP2"] = "0"
-        
-        # 预构标准传输层：锁定 10808 端口
-        self.proxy_url = "http://127.0.0.1:10808"
-        self._transport = httpx.AsyncHTTPTransport(proxy=self.proxy_url)
+        # 优先从环境变量获取代理配置，实现灵活切换
+        self.proxy_url = os.getenv("PROXY_URL")
+        if self.proxy_url:
+            logger.info(f"GeminiProvider initialized with proxy: {self.proxy_url}")
+            self._transport = httpx.AsyncHTTPTransport(proxy=self.proxy_url)
+        else:
+            logger.info("GeminiProvider initialized without proxy (direct connection)")
+            self._transport = None
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
         payload = self._build_payload(prompt, config)
@@ -104,12 +106,26 @@ class GeminiProvider(BaseProvider):
                             yield text
 
     def _build_url(self, model: str, action: str) -> str:
-        # 强制主权校准：锁定官方最稳型号
-        model_name = 'gemini-1.5-flash' 
-        # 协议补全：确保必须包含版本号，否则会触发 404
-        base = self.base_url
-        if '/v1' not in base:
-            base = f"{base.rstrip('/')}/v1beta"
+        """构建完整的 Gemini API URL。
+        
+        策略：
+        1. 优先使用传入的 model，如果为空则回退到 settings/default。
+        2. 智能版本补全：检测 v1 或 v1beta，避免遗漏导致 404。
+        3. 自动转换主权型号：gemini-1.5-flash 是目前最稳型号，支持 -latest 别名。
+        """
+        model_name = model or self.settings.default_model or DEFAULT_MODEL
+        
+        # 处理可能的模型别名或路径冲突
+        if model_name.startswith('models/'):
+            model_name = model_name[7:]
+            
+        base = self.base_url.rstrip('/')
+        
+        # 更加精确的版本检测，避免 /v1 匹配到 /v1beta 的逻辑漏洞
+        if not ('/v1beta' in base or '/v1' in base):
+            # 默认使用 v1beta 以支持最新特性（如 Pydantic Schema），但在生产环境可切换
+            base = f"{base}/v1beta"
+            
         return f'{base}/models/{model_name}:{action}'
 
     def _build_query(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:

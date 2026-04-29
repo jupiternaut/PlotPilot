@@ -17,7 +17,13 @@ const THEME_CONFIG = {
     primaryPressed: '#a88a1f',
     primarySuppl: '#e8c84a',
     text: '#f0ead6',
+    textSecondary: '#c4b99a',
+    textMuted: '#8a8070',
     surface: '#111620',
+    surfaceSubtle: '#0d1018',
+    surfaceRaised: '#181f2e',
+    divider: 'rgba(201, 162, 39, 0.06)',
+    border: 'rgba(201, 162, 39, 0.08)',
     bg: '#0a0c10'
   },
   ink: {
@@ -26,7 +32,13 @@ const THEME_CONFIG = {
     primaryPressed: '#b91c1c',
     primarySuppl: '#fca5a5',
     text: '#ffffff',
+    textSecondary: '#a3a3a3',
+    textMuted: '#737373',
     surface: '#171717',
+    surfaceSubtle: '#121212',
+    surfaceRaised: '#262626',
+    divider: 'rgba(255, 255, 255, 0.05)',
+    border: 'rgba(255, 255, 255, 0.08)',
     bg: '#0F0F0F'
   },
   cinnabar: {
@@ -35,8 +47,14 @@ const THEME_CONFIG = {
     primaryPressed: '#b91c1c',
     primarySuppl: '#fca5a5',
     text: '#1a1a1a',
+    textSecondary: '#525252',
+    textMuted: '#737373',
     surface: '#ffffff',
-    bg: '#f4f1ea'
+    surfaceSubtle: '#faf9f6',
+    surfaceRaised: '#ffffff',
+    divider: 'rgba(0, 0, 0, 0.05)',
+    border: 'rgba(0, 0, 0, 0.08)',
+    bg: '#F4F1EA'
   },
   dark: {
     primary: '#818cf8',
@@ -44,7 +62,13 @@ const THEME_CONFIG = {
     primaryPressed: '#6366f1',
     primarySuppl: '#c7d2fe',
     text: '#e2e8f0',
+    textSecondary: '#d1d5db',
+    textMuted: '#9ca3af',
     surface: '#131c31',
+    surfaceSubtle: '#0f172a',
+    surfaceRaised: '#1a2436',
+    divider: 'rgba(51, 65, 85, 0.4)',
+    border: 'rgba(148, 163, 184, 0.1)',
     bg: '#0b1121'
   },
   light: {
@@ -53,7 +77,13 @@ const THEME_CONFIG = {
     primaryPressed: '#4338ca',
     primarySuppl: '#818cf8',
     text: '#0f172a',
+    textSecondary: '#334155',
+    textMuted: '#64748b',
     surface: '#ffffff',
+    surfaceSubtle: '#f8fafc',
+    surfaceRaised: '#ffffff',
+    divider: 'rgba(15, 23, 42, 0.06)',
+    border: 'rgba(15, 23, 42, 0.09)',
     bg: '#eef1f6'
   }
 }
@@ -124,31 +154,32 @@ export const useThemeStore = defineStore('theme', () => {
 
   /** 统一的主题覆盖配置 (Technical Sovereignty Engine) */
   const themeOverrides = computed<GlobalThemeOverrides>(() => {
+    const config = themeConfig.value
     return {
       common: {
-        primaryColor: themeConfig.value.primary,
-        primaryColorHover: themeConfig.value.primaryHover,
-        primaryColorPressed: themeConfig.value.primaryPressed,
-        primaryColorSuppl: themeConfig.value.primarySuppl,
+        primaryColor: config.primary,
+        primaryColorHover: config.primaryHover,
+        primaryColorPressed: config.primaryPressed,
+        primaryColorSuppl: config.primarySuppl,
         borderRadius: '10px',
         borderRadiusSmall: '8px',
         fontSize: '14px',
         fontSizeMedium: '15px',
         lineHeight: '1.55',
         heightMedium: '38px',
-        bodyColor: themeConfig.value.bg,
-        textColor1: themeConfig.value.text,
-        textColor2: 'var(--app-text-secondary)',
-        textColor3: 'var(--app-text-muted)',
-        borderColor: 'var(--app-border)',
-        dividerColor: 'var(--app-divider)',
-        cardColor: themeConfig.value.surface,
-        modalColor: themeConfig.value.surface,
-        popoverColor: themeConfig.value.surface,
-        tableColor: themeConfig.value.surface,
-        tableColorStriped: 'var(--app-surface-subtle)',
-        tableColorHover: 'var(--app-surface-raised)',
-        tableHeaderColor: themeConfig.value.surface,
+        bodyColor: config.bg,
+        textColor1: config.text,
+        textColor2: config.textSecondary,
+        textColor3: config.textMuted,
+        borderColor: config.border,
+        dividerColor: config.divider,
+        cardColor: config.surface,
+        modalColor: config.surface,
+        popoverColor: config.surface,
+        tableColor: config.surface,
+        tableColorStriped: config.surfaceSubtle,
+        tableColorHover: config.surfaceRaised,
+        tableHeaderColor: config.surface,
       },
       Card: {
         borderRadius: '14px',
@@ -159,35 +190,35 @@ export const useThemeStore = defineStore('theme', () => {
       },
       Input: {
         borderRadius: '10px',
-        color: themeConfig.value.surface,
+        color: config.surface,
       },
       Select: {
         peers: {
           InternalSelection: {
-            color: themeConfig.value.surface,
-            borderActive: themeConfig.value.primary,
-            borderFocus: themeConfig.value.primary,
+            color: config.surface,
+            borderActive: config.primary,
+            borderFocus: config.primary,
           },
         },
       },
       Drawer: {
-        color: themeConfig.value.bg,
+        color: config.bg,
         bodyPadding: '0',
       },
       Tabs: {
-        tabTextColorActiveLine: themeConfig.value.primary,
-        tabTextColorHoverLine: 'var(--app-text-secondary)',
-        barColor: themeConfig.value.primary,
+        tabTextColorActiveLine: config.primary,
+        tabTextColorHoverLine: config.textSecondary,
+        barColor: config.primary,
       },
       Switch: {
-        railColorActive: themeConfig.value.primary,
+        railColorActive: config.primary,
       },
       Alert: {
-        color: themeConfig.value.surface,
+        color: config.surface,
         border: 'none',
       },
       Form: {
-        labelTextColorTop: 'var(--app-text-secondary)',
+        labelTextColorTop: config.textSecondary,
       },
       Scrollbar: {
         width: '8px',
