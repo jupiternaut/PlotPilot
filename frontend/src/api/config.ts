@@ -1,20 +1,180 @@
 import axios, { type AxiosRequestConfig } from 'axios'
 
+// ---------------------------------------------------------------------------
+// 单一数据源：axiosInstance.defaults.baseURL
+// - 浏览器：`/api/v1`（相对路径，走 Vite 代理）
+// - Tauri：`http://127.0.0.1:<port>/api/v1`（initApiClient 内 IPC 写入）
+// fetch / EventSource 使用 resolveHttpUrl()，从同一 baseURL 推导 origin。
+// Legacy `/api`（非 v1）使用 legacyBookHttp / legacyStatsHttp，由 syncLegacyRootsFromV1 同步主机。
+// ---------------------------------------------------------------------------
+let _isTauri: boolean | null = null
+
+function isTauri(): boolean {
+  if (_isTauri === null) {
+    if (typeof window === 'undefined') {
+      _isTauri = false
+    } else {
+      const w = window as Window & {
+        __TAURI__?: unknown
+        __TAURI_INTERNALS__?: unknown
+      }
+      _isTauri = !!(w.__TAURI__ || w.__TAURI_INTERNALS__)
+    }
+  }
+  return _isTauri
+}
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
-// 创建原始 axios 实例
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 增加到 120 秒，因为 LLM 生成可能需要较长时间
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Add response interceptor to extract data
+/** 与 apiClient 同一实例，供需完整 Axios 配置（timeout、params）的模块使用 */
+export const apiAxios = axiosInstance
+
+/** 旧版 /api 路由（book、jobs），与 v1 共用主机 */
+export const legacyBookHttp = axios.create({
+  baseURL: '/api',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+legacyBookHttp.interceptors.response.use(response => response.data)
+
+/** 旧版 /api/stats，带 SuccessResponse 解包 */
+export const legacyStatsHttp = axios.create({
+  baseURL: '/api',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+legacyStatsHttp.interceptors.response.use(response => {
+  const body = response.data
+  if (
+    body &&
+    typeof body === 'object' &&
+    'success' in body &&
+    (body as { success?: boolean }).success === true &&
+    'data' in body
+  ) {
+    return (body as { data: unknown }).data
+  }
+  return body
+})
+
+function syncLegacyRootsFromV1(): void {
+  const v1 = axiosInstance.defaults.baseURL || '/api/v1'
+  if (/^https?:\/\//i.test(v1)) {
+    const origin = new URL(v1).origin
+    legacyBookHttp.defaults.baseURL = `${origin}/api`
+    legacyStatsHttp.defaults.baseURL = `${origin}/api`
+  } else {
+    legacyBookHttp.defaults.baseURL = '/api'
+    legacyStatsHttp.defaults.baseURL = '/api'
+  }
+}
+
+/**
+ * 将必须以 `/` 开头的绝对路径（如 `/api/v1/...`）转为实际请求 URL。
+ * 与当前 `apiAxios.defaults.baseURL` 一致：浏览器保持相对路径；桌面壳补全 origin。
+ */
+export function resolveHttpUrl(absolutePathFromRoot: string): string {
+  if (!absolutePathFromRoot.startsWith('/')) {
+    throw new Error(`resolveHttpUrl: path must start with /, got: ${absolutePathFromRoot}`)
+  }
+  const v1 = axiosInstance.defaults.baseURL || '/api/v1'
+  if (/^https?:\/\//i.test(v1)) {
+    return `${new URL(v1).origin}${absolutePathFromRoot}`
+  }
+  return absolutePathFromRoot
+}
+
+async function initTauriConnection(): Promise<void> {
+  if (!isTauri()) {
+    return
+  }
+  console.log(`[Tauri] API baseURL: ${axiosInstance.defaults.baseURL}`)
+}
+
+/** 桌面壳：后端在后台线程就绪，IPC 端口在健康检查通过前可能为 0 */
+const TAURI_BACKEND_POLL_MS = 200
+const TAURI_BACKEND_WAIT_MS = 30_000  // 30秒，避免长时间卡住
+
+async function waitForTauriBackendPort(
+  invoke: (cmd: string) => Promise<number>,
+  maxWaitMs: number,
+  intervalMs: number,
+): Promise<number | null> {
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const p = await invoke('get_backend_port')
+    if (p > 0) {
+      return p
+    }
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, intervalMs)
+    })
+  }
+  return null
+}
+
+/**
+ * 初始化 API（应用启动时调用一次）
+ */
+export async function initApiClient(): Promise<void> {
+  let port: number | null = null
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    const first = await invoke<number>('get_backend_port')
+    if (first > 0) {
+      port = first
+    } else if (isTauri()) {
+      console.log('[API] 等待后端就绪...')
+      port = await waitForTauriBackendPort(
+        cmd => invoke<number>(cmd),
+        TAURI_BACKEND_WAIT_MS,
+        TAURI_BACKEND_POLL_MS,
+      )
+    }
+  } catch (e) {
+    console.warn('[API] Tauri IPC 调用失败:', e)
+  }
+
+  if (port != null && port > 0) {
+    const newBaseURL = `http://127.0.0.1:${port}/api/v1`
+    axiosInstance.defaults.baseURL = newBaseURL
+    console.log(`[API] 桌面模式 baseURL: ${newBaseURL}`)
+
+    // 验证后端是否真的响应
+    try {
+      const healthCheck = await fetch(`http://127.0.0.1:${port}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      })
+      if (!healthCheck.ok) {
+        console.warn('[API] 后端健康检查失败，状态码:', healthCheck.status)
+      }
+    } catch (e) {
+      console.warn('[API] 后端健康检查异常:', e)
+    }
+  } else if (isTauri()) {
+    axiosInstance.defaults.baseURL = 'http://127.0.0.1:8005/api/v1'
+    console.warn('[API] Tauri 下未能通过 IPC 取得端口，回退 8005')
+  }
+
+  syncLegacyRootsFromV1()
+  await initTauriConnection()
+}
+
 axiosInstance.interceptors.response.use(response => response.data)
 
-// 类型安全的 API 客户端接口
 export interface ApiClient {
   get<T>(url: string, config?: AxiosRequestConfig): Promise<T>
   post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
@@ -23,12 +183,7 @@ export interface ApiClient {
   delete<T>(url: string, config?: AxiosRequestConfig): Promise<T>
 }
 
-// 导出类型安全的 apiClient
 export const apiClient: ApiClient = axiosInstance as unknown as ApiClient
-
-// ============================================================================
-// SSE 流式接口辅助函数
-// ============================================================================
 
 export interface ChapterStreamEvent {
   type: 'connected' | 'chapter_start' | 'chapter_chunk' | 'chapter_content' | 'autopilot_stopped' | 'heartbeat'
@@ -36,19 +191,13 @@ export interface ChapterStreamEvent {
   timestamp: string
   metadata?: {
     chapter_number?: number
-    chunk?: string  // 增量文字
+    chunk?: string
     beat_index?: number
-    content?: string  // 完整内容（向后兼容）
+    content?: string
     word_count?: number
   }
 }
 
-/**
- * 订阅自动驾驶章节内容流（SSE）
- * @param novelId 小说 ID
- * @param handlers 事件处理器
- * @returns AbortController 用于取消订阅
- */
 export function subscribeChapterStream(
   novelId: string,
   handlers: {
@@ -63,9 +212,10 @@ export function subscribeChapterStream(
 ): AbortController {
   const ctrl = new AbortController()
 
-  ;(async () => {
+  void (async () => {
     try {
-      const res = await fetch(`/api/v1/autopilot/${novelId}/chapter-stream`, {
+      const streamUrl = resolveHttpUrl(`/api/v1/autopilot/${novelId}/chapter-stream`)
+      const res = await fetch(streamUrl, {
         signal: ctrl.signal,
         headers: {
           'Accept': 'text/event-stream',
@@ -78,8 +228,7 @@ export function subscribeChapterStream(
         handlers.onDisconnected?.()
         return
       }
-      
-      // 通知连接成功
+
       handlers.onConnected?.()
 
       const reader = res.body.getReader()
@@ -104,10 +253,8 @@ export function subscribeChapterStream(
               if (event.type === 'chapter_start' && event.metadata?.chapter_number) {
                 handlers.onChapterStart?.(event.metadata.chapter_number)
               } else if (event.type === 'chapter_chunk' && event.metadata?.chunk) {
-                // 真正的流式：增量文字
                 handlers.onChapterChunk?.(event.metadata.chunk, event.metadata.beat_index || 0)
               } else if (event.type === 'chapter_content' && event.metadata) {
-                // 向后兼容：完整内容
                 handlers.onChapterContent?.({
                   chapterNumber: event.metadata.chapter_number!,
                   content: event.metadata.content || '',

@@ -103,8 +103,11 @@ function getSystemDark(): boolean {
 export const useThemeStore = defineStore('theme', () => {
   const mode = ref<ThemeMode>(getStoredTheme())
 
+  // 独立追踪 OS 偏好，使 auto 模式下 isDark 能响应系统变化
+  const systemDark = ref(getSystemDark())
+
   const isDark = computed(() => {
-    if (mode.value === 'auto') return getSystemDark()
+    if (mode.value === 'auto') return systemDark.value
     // 只有 dark, anchor, ink 是暗色；cinnabar (朱砂/宣纸) 是浅色
     return ['dark', 'anchor', 'ink'].includes(mode.value)
   })
@@ -124,15 +127,14 @@ export const useThemeStore = defineStore('theme', () => {
     } catch { /* ignore */ }
   }
 
-  // 监听系统主题变化（仅 auto 模式下需要响应）
+  // 监听系统主题变化，更新响应式 systemDark 使 auto 模式即时生效
   if (typeof window !== 'undefined' && window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      // 触发 computed 重新计算即可，无需额外操作
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      systemDark.value = e.matches
     })
   }
 
-  // 同步 <html> 以支持全局 CSS 变量切换
-  watch(mode, () => {
+  function applyThemeToDOM() {
     const root = document.documentElement
     
     // 同步 data-theme 属性（墨枢、朱砂、锚点等）
@@ -144,7 +146,12 @@ export const useThemeStore = defineStore('theme', () => {
     } else {
       root.classList.remove('dark')
     }
-  }, { immediate: true })
+  }
+
+  // 监听 isDark + mode，覆盖所有变化路径：
+  // - 手动切换 mode（light/dark/anchor/auto）
+  // - auto 模式下 OS 偏好变化（systemDark 改变 → isDark 改变）
+  watch([isDark, mode], applyThemeToDOM, { immediate: true })
 
   // 暴露当前模式下的 Hex 色值配置 (供 Naive UI 消费)
   const themeConfig = computed(() => {

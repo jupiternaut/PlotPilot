@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from application.blueprint.services.story_structure_service import StoryStructureService
 from application.blueprint.services.continuous_planning_service import ContinuousPlanningService
+from interfaces.api.dependencies import get_chapter_renumber_coordinator
 from infrastructure.persistence.database.story_node_repository import StoryNodeRepository
 from infrastructure.persistence.database.chapter_element_repository import ChapterElementRepository
 from infrastructure.persistence.database.sqlite_chapter_repository import SqliteChapterRepository
@@ -25,25 +26,11 @@ def get_planning_service() -> ContinuousPlanningService:
     story_node_repo = StoryNodeRepository(db_path)
     chapter_element_repo = ChapterElementRepository(db_path)
 
-    # 获取 LLM 服务
-    from infrastructure.ai.providers.anthropic_provider import AnthropicProvider
-    from infrastructure.ai.config.settings import Settings
-
-    llm_service = None
-    api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
-    if api_key:
-        settings = Settings(
-            api_key=api_key.strip(),
-            base_url=os.getenv("ANTHROPIC_BASE_URL")
-        )
-        try:
-            llm_service = AnthropicProvider(settings)
-        except Exception:
-            pass
+    # 使用统一的动态 LLM 服务（支持 OpenAI 兼容模型）
+    from interfaces.api.dependencies import get_llm_service, get_bible_repository
+    llm_service = get_llm_service()
 
     from application.world.services.bible_service import BibleService
-    from interfaces.api.dependencies import get_bible_repository
-
     bible_service = BibleService(get_bible_repository())
 
     return ContinuousPlanningService(
@@ -68,6 +55,7 @@ def get_service(
     return StoryStructureService(
         repository,
         chapter_repository=chapter_repo,
+        chapter_renumber_coordinator=get_chapter_renumber_coordinator(),
         planning_service=planning_service
     )
 

@@ -6,6 +6,9 @@
 - T1: 可压缩内容（图谱子网、近期幕摘要）—— 按比例压缩
 - T2: 动态内容（最近章节）—— 动态水位线
 - T3: 可牺牲内容（向量召回）—— 预算不足时归零
+
+与 AutoNovelGenerationWorkflow 拼接时：Layer1≈T0+T1，Layer2 段名为 RECENT CHAPTERS（T2），
+Layer3 段名为 VECTOR RECALL（T3）；见 assemble_chapter_bundle_context_text。
 """
 import logging
 from typing import List, Optional, TYPE_CHECKING, Dict, Any
@@ -187,7 +190,7 @@ class ContextBuilder:
             },
         }
 
-    def magnify_outline_to_beats(self, chapter_number: int, outline: str, target_chapter_words: int = 3500) -> List[Beat]:
+    def magnify_outline_to_beats(self, chapter_number: int, outline: str, target_chapter_words: int = 2500) -> List[Beat]:
         """节拍放大器：将章节大纲拆分为微观节拍
         
         核心策略：
@@ -242,49 +245,87 @@ class ContextBuilder:
                 Beat(description="情绪余波：接受现实、决定下一步行动", target_words=800, focus="emotion"),
             ]
         else:
-            # 默认：日常/过渡场景
+            # 默认：四章拍「起承转合」，用信息义务占满篇幅，减少空泛水词
             beats = [
-                Beat(description="场景开场：环境描写、人物登场、日常互动", target_words=800, focus="sensory"),
-                Beat(description="主要事件：推进剧情的核心动作或对话", target_words=1200, focus="dialogue"),
-                Beat(description="场景收尾：情绪沉淀、埋下伏笔、过渡到下一章", target_words=500, focus="emotion"),
+                Beat(
+                    description="起：交代场景与人物状态，抛出本章要处理的具体麻烦或悬念（可小但须清晰）。",
+                    target_words=500,
+                    focus="sensory",
+                ),
+                Beat(
+                    description="承：阻碍升级或对手施压，人物关系或信息出现新变化。",
+                    target_words=500,
+                    focus="dialogue",
+                ),
+                Beat(
+                    description="转：主角做出选择、亮出底牌或发现盲点，情节出现可感知的转折。",
+                    target_words=500,
+                    focus="action",
+                ),
+                Beat(
+                    description="合：阶段性结果落地，同时抛出下一章钩子（勿提前剧透全书谜底）。",
+                    target_words=500,
+                    focus="suspense",
+                ),
             ]
 
-        # 调整字数分配
+        # 调整字数分配（保守策略）
+        # LLM 倾向于超出字数要求，因此 prompt 中只要求目标的 75%
+        # 配合 max_tokens = target × 1.1（硬性上限），强制控制字数
         total_words = sum(b.target_words for b in beats)
+        prompt_target_ratio = 0.75  # prompt 中只要求 75%
         if total_words != target_chapter_words:
-            ratio = target_chapter_words / total_words
+            ratio = (target_chapter_words * prompt_target_ratio) / total_words
             for beat in beats:
                 beat.target_words = int(beat.target_words * ratio)
 
-        logger.info(f"节拍放大器：将大纲拆分为 {len(beats)} 个节拍")
+        logger.info(
+            f"节拍放大器：将大纲拆分为 {len(beats)} 个节拍，"
+            f"prompt 目标 {sum(b.target_words for b in beats)} 字（实际目标 {target_chapter_words} 字的 {int(prompt_target_ratio * 100)}%）"
+        )
         return beats
 
-    def build_beat_prompt(self, beat: Beat, beat_index: int, total_beats: int) -> str:
-        """构建单个节拍的生成提示"""
-        focus_instructions = {
-            "sensory": "重点描写感官细节：视觉（光影、色彩）、听觉（声音、静默）、触觉（温度、质感）、嗅觉、味觉。让读者身临其境。",
-            "dialogue": "重点描写对话：人物的语气、表情、肢体语言、对话中的潜台词。对话要推动剧情，展现人物性格。",
-            "action": "重点描写动作：具体的动作细节、力度、速度、节奏。避免抽象描述，要让读者看到画面。",
-            "emotion": "重点描写情绪：内心独白、情绪的起伏、回忆闪回、心理挣扎。深入人物内心世界。",
-            "hook": "开篇核心【黄金法则】：必须包含一个强烈的情感冲击点。通过具体行动展现主角的核心特质，暗示重大冲突即将发生。切勿平铺直叙或使用大段背景介绍。",
-            "character_intro": "人物引入【塑造技巧】：通过动作或对话来展现人物，不要平铺直叙。对白要能立刻区分出不同角色的性格特点，建立他们的记忆点。",
-            "suspense": "悬念铺垫【文学指导】：留下剧情钩子！不要一次性把答案抖露。在结尾营造紧张或神秘气氛，埋下让人欲罢不能的伏笔，保持读者的强烈好奇心。",
-        }
+    # 节拍聚焦指令已迁移至 prompts_defaults.json (id=beat-focus-instructions)
+    # 通过 PromptLoader 统一读取，不再在此硬编码
+    _BEAT_PROMPT_ID = "beat-focus-instructions"
 
+    def build_beat_prompt(self, beat: Beat, beat_index: int, total_beats: int) -> str:
+        """构建单个节拍的生成提示（指令从 prompts_defaults.json 统一读取）"""
+        from infrastructure.ai.prompt_loader import get_prompt_loader
+
+        loader = get_prompt_loader()
+
+        # 聚焦指令字典
+        focus_instructions = loader.get_directives_dict(self._BEAT_PROMPT_ID, "_focus_instructions")
         instruction = focus_instructions.get(beat.focus, "")
 
-        return f"""
-【节拍 {beat_index + 1}/{total_beats}】
-目标字数：{beat.target_words} 字
-聚焦点：{beat.focus}
+        # 感官锚点轮转
+        sensory_rotation = loader.get_list_field(self._BEAT_PROMPT_ID, "_sensory_rotation")
+        if not sensory_rotation:
+            # 安全降级
+            sensory_rotation = [
+                "本节拍至少一处环境锚点：光影或空间层次。",
+                "本节拍至少一处环境锚点：温度、体感或材质。",
+                "本节拍至少一处环境锚点：声音或节奏。",
+                "本节拍至少一处环境锚点：气味或味觉细节。",
+            ]
+        anchor_line = sensory_rotation[beat_index % len(sensory_rotation)]
 
-{instruction}
+        # 叙事义务
+        obligations = loader.get_field(self._BEAT_PROMPT_ID, "_obligations", {})
+        if isinstance(obligations, dict):
+            obligation = obligations.get(beat.focus, obligations.get("default", "叙事义务：推进情节或深化人物。"))
+        else:
+            obligation = "叙事义务：推进情节或深化人物。"
 
-节拍内容：
-{beat.description}
-
-注意：
-- 这是完整章节的一部分，不要写章节标题
-- 不要在节拍结尾强行总结或过渡
-- 专注于当前节拍的内容，自然衔接到下一节拍
-""".strip()
+        # 使用 PromptLoader 渲染模板
+        return loader.render(self._BEAT_PROMPT_ID, template_field="user_template", variables={
+            "beat_index": beat_index + 1,
+            "total_beats": total_beats,
+            "target_words": beat.target_words,
+            "focus": beat.focus,
+            "instruction": instruction,
+            "description": beat.description,
+            "anchor_line": anchor_line,
+            "obligation": obligation,
+        })

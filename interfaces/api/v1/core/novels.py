@@ -1,6 +1,6 @@
 """Novel API 路由"""
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from typing import List
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 import logging
 
@@ -26,8 +26,22 @@ class CreateNovelRequest(BaseModel):
     novel_id: str = Field(..., description="小说 ID")
     title: str = Field(..., description="小说标题")
     author: str = Field(..., description="作者")
-    target_chapters: int = Field(..., gt=0, description="目标章节数")
-    premise: str = Field(default="", description="故事梗概/创意")
+    target_chapters: int = Field(
+        100,
+        ge=0,
+        description="目标章节数；选 V1 体量档时可传 0 由服务端推导",
+    )
+    premise: str = Field(default="", max_length=2000, description="故事梗概/创意（建议 2000 字内）")
+    genre: str = Field(default="", description="赛道/类型（下拉预设）")
+    world_preset: str = Field(default="", description="世界观基调（下拉预设）")
+    length_tier: Optional[Literal["short", "standard", "epic"]] = Field(
+        None,
+        description="V1 目标篇幅档：short≈30万字 / standard≈100万字 / epic≈300万字（推导章数与每章字数）",
+    )
+    target_words_per_chapter: Optional[int] = Field(
+        None,
+        description="每章目标字数；可选，与体量档或自定义章数搭配",
+    )
 
 
 class UpdateStageRequest(BaseModel):
@@ -41,6 +55,12 @@ class UpdateNovelRequest(BaseModel):
     author: str = Field(None, description="作者")
     target_chapters: int = Field(None, gt=0, description="目标章节数")
     premise: str = Field(None, description="故事梗概/创意")
+    target_words_per_chapter: Optional[int] = Field(
+        None,
+        ge=500,
+        le=10000,
+        description="每章目标字数（全托管节拍与章长参考）",
+    )
 
 
 class UpdateAutoApproveRequest(BaseModel):
@@ -108,7 +128,11 @@ async def create_novel(
         title=request.title,
         author=request.author,
         target_chapters=request.target_chapters,
-        premise=request.premise
+        premise=request.premise,
+        genre=request.genre,
+        world_preset=request.world_preset,
+        length_tier=request.length_tier,
+        target_words_per_chapter=request.target_words_per_chapter,
     )
 
     return novel_dto
@@ -170,7 +194,14 @@ async def update_novel(
         HTTPException: 如果小说不存在
     """
     try:
-        return service.update_novel(novel_id, request.title, request.author, request.target_chapters, request.premise)
+        return service.update_novel(
+            novel_id,
+            request.title,
+            request.author,
+            request.target_chapters,
+            request.premise,
+            target_words_per_chapter=request.target_words_per_chapter,
+        )
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -212,6 +243,53 @@ async def delete_novel(
         service: Novel 服务
     """
     service.delete_novel(novel_id)
+
+
+@router.post("/{novel_id}/bible/generate", status_code=202)
+async def generate_bible_alias(
+    novel_id: str,
+    background_tasks: BackgroundTasks,
+    stage: str = "all",
+    bible_generator: AutoBibleGenerator = Depends(get_auto_bible_generator),
+    knowledge_generator: AutoKnowledgeGenerator = Depends(get_auto_knowledge_generator)
+):
+    """手动触发 Bible 生成（别名路由，与 POST /bible/novels/{novel_id}/generate 等价）
+
+    Args:
+        novel_id: 小说 ID
+        background_tasks: FastAPI 后台任务
+        stage: 生成阶段 (all / worldbuilding / characters / locations)
+
+    Returns:
+        202 Accepted
+    """
+    try:
+        import traceback
+
+        async def _generate_task():
+            try:
+                bible_data = await bible_generator.generate_and_save(
+                    novel_id=novel_id,
+                    stage=stage
+                )
+                if knowledge_generator and stage in ("all", "worldbuilding"):
+                    await knowledge_generator.generate_and_save(
+                        novel_id=novel_id,
+                        bible_data=bible_data
+                    )
+            except Exception as e:
+                logger.error(f"Failed to generate Bible/Knowledge for {novel_id}: {e}")
+                logger.error(traceback.format_exc())
+
+        background_tasks.add_task(_generate_task)
+
+        return {
+            "message": "Bible generation started",
+            "novel_id": novel_id,
+            "status_url": f"/api/v1/bible/novels/{novel_id}/bible/status"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"启动Bible生成失败: {str(e)}")
 
 
 @router.patch("/{novel_id}/auto-approve-mode", response_model=NovelDTO)

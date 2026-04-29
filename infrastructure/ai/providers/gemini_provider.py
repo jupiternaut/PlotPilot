@@ -14,6 +14,7 @@ from domain.ai.value_objects.prompt import Prompt
 from domain.ai.value_objects.token_usage import TokenUsage
 from infrastructure.ai.config.settings import Settings
 from .base import BaseProvider
+from .model_resolution import require_resolved_model_id
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +45,18 @@ class GeminiProvider(BaseProvider):
             self._transport = None
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
+        model_id = require_resolved_model_id(
+            config.model,
+            self.settings.default_model,
+            provider_label="Gemini",
+        )
         payload = self._build_payload(prompt, config)
         query = self._build_query()
-        url = self._build_url(config.model or self.settings.default_model or DEFAULT_MODEL, 'generateContent')
+        url = self._build_url(model_id, 'generateContent')
         timeout = httpx.Timeout(self.settings.timeout_seconds)
 
         # 使用预构的传输层，物理性消除 str 对象的 Attribute 报错
-        async with httpx.AsyncClient(transport=self._transport, timeout=timeout) as client:
+        async with httpx.AsyncClient(transport=self._transport, timeout=timeout, trust_env=False) as client:
             logger.info(f"Final Gemini API Request URL: {url}")
             response = await client.post(
                 url,
@@ -82,12 +88,17 @@ class GeminiProvider(BaseProvider):
         return GenerationResult(content=content, token_usage=token_usage)
 
     async def stream_generate(self, prompt: Prompt, config: GenerationConfig) -> AsyncIterator[str]:
+        model_id = require_resolved_model_id(
+            config.model,
+            self.settings.default_model,
+            provider_label="Gemini",
+        )
         payload = self._build_payload(prompt, config)
         query = self._build_query({'alt': 'sse'})
-        url = self._build_url(config.model or self.settings.default_model or DEFAULT_MODEL, 'streamGenerateContent')
+        url = self._build_url(model_id, 'streamGenerateContent')
         timeout = httpx.Timeout(self.settings.timeout_seconds)
 
-        async with httpx.AsyncClient(transport=self._transport, timeout=timeout) as client:
+        async with httpx.AsyncClient(transport=self._transport, timeout=timeout, trust_env=False) as client:
             async with client.stream(
                 'POST',
                 url,
@@ -187,6 +198,8 @@ class GeminiProvider(BaseProvider):
         for candidate in data.get('candidates') or []:
             content = candidate.get('content') or {}
             for part in content.get('parts') or []:
+                if part.get('thought') is True:
+                    continue
                 text = part.get('text')
                 if text:
                     pieces.append(str(text))

@@ -68,9 +68,8 @@ def get_service() -> ContinuousPlanningService:
     story_node_repo = StoryNodeRepository(db_path)
     chapter_element_repo = ChapterElementRepository(db_path)
 
-    # 获取统一的动态 LLM 服务
+    # 使用统一的动态 LLM 服务（支持 OpenAI 兼容模型）
     from interfaces.api.dependencies import get_llm_service, get_bible_repository
-
     llm_service = get_llm_service()
 
     from application.world.services.bible_service import BibleService
@@ -338,5 +337,7 @@ async def get_chapter_detail(
                 "elements": [elem.to_dict() for elem in elements]
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取章节详情失败: {str(e)}")
