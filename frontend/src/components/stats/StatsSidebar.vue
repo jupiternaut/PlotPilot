@@ -625,6 +625,10 @@ const updateTimeText = computed(() => formatTime(lastUpdateTime.value))
   border-color: color-mix(in srgb, var(--color-brand, #4f46e5) 52%, transparent);
 }
 
+.action-btn.action-settings {
+  grid-column: 1 / -1;
+}
+
 .action-btn:hover {
   filter: none;
   transform: none;

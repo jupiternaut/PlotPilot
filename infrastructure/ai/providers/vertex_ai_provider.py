@@ -95,10 +95,14 @@ class VertexAIProvider(BaseProvider):
             config=gen_config
         )
         
-        # 提取内容
+        # 提取内容 (CodeRabbit: 处理安全拦截，防止 response.text 为空时崩溃)
+        candidate = response.candidates[0] if response.candidates else None
+        if candidate and candidate.finish_reason == "SAFETY":
+            raise ValueError("内容生成被 Vertex AI 安全过滤器拦截。请尝试修改输入或降低敏感度。")
+        
         content = response.text or ""
         
-        # 提取 Token 使用量 (CodeRabbit: 增加 None 判定)
+        # 提取 Token 使用量
         usage = getattr(response, 'usage_metadata', None)
         if usage:
             token_usage = TokenUsage(
@@ -170,10 +174,12 @@ class VertexAIProvider(BaseProvider):
             "system_instruction": system_instruction.strip() if system_instruction and system_instruction.strip() else None
         }
         
-        # 针对 Gemini 2.0+ 的思维配置 (Thinking)
+        # 针对 Gemini 3 的思维配置 (Thinking)
         if "thinking_level" in eb:
+            # SDK 期望小写字符串: "low", "medium", "high"
+            level = str(eb["thinking_level"]).lower()
             params["thinking_config"] = types.ThinkingConfig(
-                thinking_level=eb["thinking_level"] # e.g., "LOW", "MEDIUM", "HIGH"
+                thinking_level=level
             )
             
         # 针对搜索工具的支持

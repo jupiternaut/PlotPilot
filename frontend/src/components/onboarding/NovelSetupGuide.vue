@@ -1090,6 +1090,14 @@ const handleNext = async () => {
 
 const handlePrev = () => {
   if (currentStep.value > 1) {
+    // CodeRabbit: 后退时使当前步骤的轮询失效，防止重复进入时冲突
+    if (currentStep.value === 2) {
+      step2PollEpoch.value++
+      generatingCharacters.value = false
+    } else if (currentStep.value === 3) {
+      step3PollEpoch.value++
+      generatingLocations.value = false
+    }
     currentStep.value--
   }
 }

@@ -65,11 +65,16 @@ export const useNovelStore = defineStore('novel', () => {
     try {
       await novelApi.deleteNovel(slug)
       books.value = books.value.filter(b => b.slug !== slug)
-      // 同步刷新全局统计
-      await statsStore.loadGlobalStats(true)
     } catch (error) {
       console.error('Failed to delete book:', error)
       throw error
+    }
+
+    // 同步刷新全局统计（作为后续操作，失败不应报“删除失败”）
+    try {
+      await statsStore.loadGlobalStats(true)
+    } catch (error) {
+      console.warn('Book deleted but failed to refresh global stats:', error)
     }
   }
 

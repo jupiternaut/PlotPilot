@@ -297,6 +297,7 @@ def _fix_llm_profiles_protocol_check(conn: sqlite3.Connection) -> None:
     except Exception as e:
         logger.error(f"Failed to fix llm_profiles schema: {e}")
         conn.rollback()
+        raise RuntimeError(f"Critical database migration failed: {e}") from e
 
 
 
