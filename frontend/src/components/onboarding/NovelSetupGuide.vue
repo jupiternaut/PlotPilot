@@ -303,6 +303,7 @@
             v-if="(currentStep === 1 && bibleGenerated) || (currentStep === 2 && charactersGenerated) || (currentStep === 3 && locationsGenerated)"
             type="primary"
             @click="handleNext"
+            :loading="isProcessingNext"
           >
             确认并继续
           </n-button>
@@ -525,6 +526,7 @@ const locationPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 /** 作废第 2/3 步后台轮询（关闭向导或重置时递增） */
 const step2PollEpoch = ref(0)
 const step3PollEpoch = ref(0)
+const isProcessingNext = ref(false)
 
 /**
  * 核心：同步当前小说的生成状态
@@ -969,92 +971,95 @@ watch(currentStep, (step) => {
 })
 
 const handleNext = async () => {
-  if (currentStep.value === 1) {
-    step2PollEpoch.value += 1
-    const epoch2 = step2PollEpoch.value
-    currentStep.value = 2
-    // 如果人物已存在，跳过生成
-    if (charactersGenerated.value) {
-      return
+  if (isProcessingNext.value) return
+  isProcessingNext.value = true
+  
+  try {
+    if (currentStep.value === 1) {
+      step2PollEpoch.value += 1
+      const epoch2 = step2PollEpoch.value
+      currentStep.value = 2
+      if (charactersGenerated.value) return
+      
+      generatingCharacters.value = true
+      charactersGenerated.value = false
+      charactersError.value = ''
+      
+      try {
+        await bibleApi.generateBible(props.novelId, 'characters')
+        pollBibleUntil(
+          (b) => (b.characters?.length ?? 0) > 0,
+          {
+            isStale: () => step2PollEpoch.value !== epoch2 || currentStep.value !== 2 || !generatingCharacters.value,
+            watchBackendFailure: true,
+            onSuccess: () => {
+              generatingCharacters.value = false
+              charactersGenerated.value = true
+            },
+            onTimeout: () => {
+              generatingCharacters.value = false
+              charactersError.value = `等待人物生成超时。请到工作台 Bible 查看；若无数据可返回上一步重试。`
+              message.warning('人物生成超时')
+            },
+            onFatal: (msg) => {
+              generatingCharacters.value = false
+              charactersError.value = msg
+              message.error(msg)
+            },
+          },
+        )
+      } catch (err) {
+        console.error('Failed to start character generation:', err)
+        generatingCharacters.value = false
+        charactersError.value = formatApiError(err) || '启动失败'
+      }
+    } else if (currentStep.value === 2) {
+      step3PollEpoch.value += 1
+      const epoch3 = step3PollEpoch.value
+      currentStep.value = 3
+      if (locationsGenerated.value) return
+      
+      generatingLocations.value = true
+      locationsGenerated.value = false
+      locationsError.value = ''
+      
+      try {
+        await bibleApi.generateBible(props.novelId, 'locations')
+        pollBibleUntil(
+          (b) => (b.locations?.length ?? 0) > 0,
+          {
+            isStale: () => step3PollEpoch.value !== epoch3 || currentStep.value !== 3 || !generatingLocations.value,
+            watchBackendFailure: true,
+            onSuccess: () => {
+              generatingLocations.value = false
+              locationsGenerated.value = true
+            },
+            onTimeout: () => {
+              generatingLocations.value = false
+              locationsError.value = `等待地图生成超时。请到工作台 Bible 查看。`
+              message.warning('地图生成超时')
+            },
+            onFatal: (msg) => {
+              generatingLocations.value = false
+              locationsError.value = msg
+              message.error(msg)
+            },
+          },
+        )
+      } catch (err) {
+        console.error('Failed to start location generation:', err)
+        generatingLocations.value = false
+        locationsError.value = formatApiError(err) || '启动失败'
+      }
+    } else if (currentStep.value === 3) {
+      currentStep.value = 4
+    } else if (currentStep.value < 5) {
+      currentStep.value++
     }
-    generatingCharacters.value = true
-    charactersGenerated.value = false
-    charactersError.value = ''
-    try {
-      await bibleApi.generateBible(props.novelId, 'characters')
-      pollBibleUntil(
-        (b) => (b.characters?.length ?? 0) > 0,
-        {
-          isStale: () =>
-            step2PollEpoch.value !== epoch2 || currentStep.value !== 2 || !generatingCharacters.value,
-          watchBackendFailure: true,
-          onSuccess: () => {
-            generatingCharacters.value = false
-            charactersGenerated.value = true
-          },
-          onTimeout: () => {
-            generatingCharacters.value = false
-            charactersError.value = `等待人物生成超时（约 ${WIZARD_STEP_TIMEOUT_SECONDS} 秒）。后台可能仍在跑——请到工作台 Bible 查看；若无数据可返回上一步再进入本步重试，或在 Bible 手动生成。`
-            message.warning('人物生成超时')
-          },
-          onFatal: (msg) => {
-            generatingCharacters.value = false
-            charactersError.value = msg
-            message.error(msg)
-          },
-        },
-      )
-    } catch (error: unknown) {
-      console.error('Failed to generate characters:', error)
-      generatingCharacters.value = false
-      charactersError.value = isLikelyTimeoutError(error)
-        ? '提交人物生成超时，请检查网络与 API 后再试。'
-        : formatApiError(error) || '人物生成启动失败'
-    }
-  } else if (currentStep.value === 2) {
-    step3PollEpoch.value += 1
-    const epoch3 = step3PollEpoch.value
-    currentStep.value = 3
-    // 如果地点已存在，跳过生成
-    if (locationsGenerated.value) {
-      return
-    }
-    generatingLocations.value = true
-    locationsGenerated.value = false
-    locationsError.value = ''
-    try {
-      await bibleApi.generateBible(props.novelId, 'locations')
-      pollBibleUntil(
-        (b) => (b.locations?.length ?? 0) > 0,
-        {
-          isStale: () =>
-            step3PollEpoch.value !== epoch3 || currentStep.value !== 3 || !generatingLocations.value,
-          watchBackendFailure: true,
-          onSuccess: () => {
-            generatingLocations.value = false
-            locationsGenerated.value = true
-          },
-          onTimeout: () => {
-            generatingLocations.value = false
-            locationsError.value = `等待地图生成超时（约 ${WIZARD_STEP_TIMEOUT_SECONDS} 秒）。请到工作台 Bible 查看地点是否已写入，或稍后重试。`
-            message.warning('地图生成超时')
-          },
-          onFatal: (msg) => {
-            generatingLocations.value = false
-            locationsError.value = msg
-            message.error(msg)
-          },
-        },
-      )
-    } catch (error: unknown) {
-      console.error('Failed to generate locations:', error)
-      generatingLocations.value = false
-      locationsError.value = isLikelyTimeoutError(error)
-        ? '提交地图生成超时，请检查网络与 API 后再试。'
-        : formatApiError(error) || '地图生成启动失败'
-    }
-  } else if (currentStep.value < 5) {
-    currentStep.value++
+  } catch (globalErr) {
+    console.error('Wizard global error:', globalErr)
+  } finally {
+    isProcessingNext.value = false
   }
 }
 

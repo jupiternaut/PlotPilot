@@ -254,6 +254,53 @@ def _apply_migration_files(conn: sqlite3.Connection) -> None:
             logger.warning("Failed to apply migration %s: %s", migration_file, e)
 
 
+def _fix_llm_profiles_protocol_check(conn: sqlite3.Connection) -> None:
+    """修复 llm_profiles 表的 CHECK 约束，确保包含 vertex-ai (SQLite 迁移方案)。"""
+    cur = conn.execute("SELECT sql FROM sqlite_master WHERE name='llm_profiles'")
+    row = cur.fetchone()
+    if not row:
+        return
+    sql = row[0]
+    if "vertex-ai" in sql:
+        return
+
+    logger.info("llm_profiles schema outdated (missing vertex-ai check). Recreating table...")
+    # SQLite 迁移：重命名 -> 建新表 -> 导数据 -> 删旧表
+    try:
+        conn.execute("ALTER TABLE llm_profiles RENAME TO llm_profiles_old")
+        conn.execute("""
+            CREATE TABLE llm_profiles (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT '',
+                preset_key TEXT NOT NULL DEFAULT 'custom-openai-compatible',
+                protocol TEXT NOT NULL DEFAULT 'openai' CHECK(protocol IN ('openai', 'anthropic', 'gemini', 'vertex-ai')),
+                base_url TEXT NOT NULL DEFAULT '',
+                api_key TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                temperature REAL NOT NULL DEFAULT 0.7,
+                max_tokens INTEGER NOT NULL DEFAULT 4096,
+                timeout_seconds INTEGER NOT NULL DEFAULT 300,
+                extra_headers TEXT NOT NULL DEFAULT '{}',
+                extra_query TEXT NOT NULL DEFAULT '{}',
+                extra_body TEXT NOT NULL DEFAULT '{}',
+                notes TEXT NOT NULL DEFAULT '',
+                use_legacy_chat_completions INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("INSERT INTO llm_profiles SELECT * FROM llm_profiles_old")
+        conn.execute("DROP TABLE llm_profiles_old")
+        conn.commit()
+        logger.info("llm_profiles table recreated with updated CHECK constraint.")
+    except Exception as e:
+        logger.error(f"Failed to fix llm_profiles schema: {e}")
+        conn.rollback()
+
+
+
+
 def _ensure_triple_provenance_table(conn: sqlite3.Connection) -> None:
     """旧库补齐 triple_provenance 表（schema.sql 对新库已包含）。"""
     conn.execute(
@@ -330,6 +377,7 @@ class DatabaseConnection:
         _apply_character_enhancements(conn)
         _apply_chapter_summaries_enhancements(conn)
         _ensure_triple_provenance_table(conn)
+        _fix_llm_profiles_protocol_check(conn)
         _apply_migration_files(conn)
         conn.close()
 

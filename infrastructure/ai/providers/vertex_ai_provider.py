@@ -39,18 +39,22 @@ class VertexAIProvider(BaseProvider):
             logger.error("google-genai SDK not installed. Please run 'pip install google-genai'")
             return
 
-        # 1. 获取基础配置
-        self.region = (
+        # 安全获取 region 和 project_id (CodeRabbit: 防止 NoneType 报错)
+        raw_region = (
             settings.extra_body.get('region') 
             or os.getenv("GOOGLE_CLOUD_LOCATION") 
             or os.getenv("GCP_REGION") 
             or DEFAULT_REGION
-        ).strip()
-        self.project_id = (
+        )
+        self.region = raw_region.strip() if raw_region else DEFAULT_REGION
+
+        raw_project_id = (
             settings.extra_body.get('project_id') 
             or os.getenv("GOOGLE_CLOUD_PROJECT") 
             or os.getenv("GCP_PROJECT_ID")
-        ).strip()
+            or ""
+        )
+        self.project_id = raw_project_id.strip()
         
         # 2. 初始化客户端 (回归 Vertex AI 企业专线 + 注入关键计费请求头)
         try:
@@ -69,6 +73,15 @@ class VertexAIProvider(BaseProvider):
             logger.error(f"Failed to initialize GenAI Client: {e}")
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
+        """执行单次文本生成任务。
+
+        Args:
+            prompt: 包含系统指令和用户输入的 Prompt 对象。
+            config: 包含模型 ID、温度等参数的生成配置。
+
+        Returns:
+            GenerationResult: 包含生成文本及 Token 使用量元数据的结果。
+        """
         self._ensure_sdk()
         model_id = self._get_resolved_model(config)
         
@@ -84,16 +97,28 @@ class VertexAIProvider(BaseProvider):
         # 提取内容
         content = response.text or ""
         
-        # 提取 Token 使用量
-        usage = response.usage_metadata
-        token_usage = TokenUsage(
-            input_tokens=usage.prompt_token_count or 0,
-            output_tokens=usage.candidates_token_count or 0
-        )
+        # 提取 Token 使用量 (CodeRabbit: 增加 None 判定)
+        usage = getattr(response, 'usage_metadata', None)
+        if usage:
+            token_usage = TokenUsage(
+                input_tokens=usage.prompt_token_count or 0,
+                output_tokens=usage.candidates_token_count or 0
+            )
+        else:
+            token_usage = TokenUsage(input_tokens=0, output_tokens=0)
         
         return GenerationResult(content=content, token_usage=token_usage)
 
     async def stream_generate(self, prompt: Prompt, config: GenerationConfig) -> AsyncIterator[str]:
+        """执行流式文本生成任务。
+
+        Args:
+            prompt: 包含系统指令和用户输入的 Prompt 对象。
+            config: 包含模型 ID、温度等参数的生成配置。
+
+        Yields:
+            str: 生成的文本片段。
+        """
         self._ensure_sdk()
         model_id = self._get_resolved_model(config)
         gen_config = self._build_genai_config(config, prompt.system)
@@ -106,6 +131,11 @@ class VertexAIProvider(BaseProvider):
             config=gen_config
         )
         async for chunk in stream:
+            # CodeRabbit: 捕获流式末尾的 Token 统计 (如果 SDK 提供了)
+            if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
+                usage = chunk.usage_metadata
+                logger.debug(f"Vertex AI Stream Usage: input={usage.prompt_token_count}, output={usage.candidates_token_count}")
+            
             if chunk.text:
                 yield chunk.text
 

@@ -114,12 +114,6 @@ async def list_models(payload: ModelListRequest) -> ModelListResponse:
             'anthropic-version': '2023-06-01',
         }
     elif api_format == 'gemini':
-        # --- PlotPilot Stability Patch: Gemini Connectivity ---
-        import os
-        os.environ["HTTPX_HTTP2"] = "0"
-        os.environ["HTTPS_PROXY"] = "socks5h://127.0.0.1:10808"
-        os.environ["HTTP_PROXY"] = "socks5h://127.0.0.1:10808"
-        # ---------------------------------------------------
         actual_base = base_url or 'https://generativelanguage.googleapis.com/v1beta'
         url = f"{actual_base.rstrip('/')}/models?key={api_key}"
         headers = {'Content-Type': 'application/json'}
@@ -131,9 +125,8 @@ async def list_models(payload: ModelListRequest) -> ModelListResponse:
         }
 
     try:
-        # 不向子进程继承 HTTP(S)_PROXY：本机 Clash/V2 等监听 127.0.0.1 时，httpx 走代理易导致
-        # start_tls / BrokenResourceError，而国内直连 API 域名通常无需系统代理。
-        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+        # 允许继承系统环境变量中的代理设置 (CodeRabbit: Remove trust_env=False)
+        async with httpx.AsyncClient(timeout=timeout, trust_env=True) as client:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             try:

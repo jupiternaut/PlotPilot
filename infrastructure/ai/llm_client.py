@@ -1,7 +1,7 @@
 """LLM 客户端包装器，支持动态服务切换"""
 import os
 import logging
-from typing import AsyncIterator, Optional, Any, Dict
+from typing import AsyncIterator, Optional, Any, Dict, Union
 
 from domain.ai.services.llm_service import GenerationConfig, LLMService
 from domain.ai.value_objects.prompt import Prompt
