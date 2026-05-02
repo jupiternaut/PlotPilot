@@ -295,6 +295,7 @@ const protocolOptions = [
   { label: 'OpenAI 兼容', value: 'openai' },
   { label: 'Anthropic / Claude 兼容', value: 'anthropic' },
   { label: 'Gemini', value: 'gemini' },
+  { label: 'Vertex AI / GCP', value: 'vertex-ai' },
 ]
 
 const presetOptions = computed(() =>

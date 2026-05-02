@@ -1,6 +1,6 @@
 import { apiClient } from './config'
 
-export type LLMProtocol = 'openai' | 'anthropic' | 'gemini'
+export type LLMProtocol = 'openai' | 'anthropic' | 'gemini' | 'vertex-ai'
 
 export interface LLMPreset {
   key: string

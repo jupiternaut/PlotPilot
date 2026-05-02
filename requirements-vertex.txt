@@ -1,0 +1,7 @@
+# ── Google Vertex AI 扩展依赖 ──
+# 仅当你在 .env 中开启 GOOGLE_GENAI_USE_VERTEXAI=true 时需要安装
+# 安装命令: pip install -r requirements-vertex.txt
+
+google-genai>=1.0.0
+google-auth>=2.26.0
+google-cloud-aiplatform>=1.70.0

@@ -17,7 +17,7 @@ from infrastructure.ai.url_utils import (
 
 logger = logging.getLogger(__name__)
 
-LLMProtocol = Literal['openai', 'anthropic', 'gemini']
+LLMProtocol = Literal['openai', 'anthropic', 'gemini', 'vertex-ai']
 
 
 class LLMPreset(BaseModel):
@@ -256,6 +256,15 @@ class LLMControlService:
                 default_model='',
                 description='方舟 OpenAI-compatible 接口；模型名以方舟控制台 Endpoint 为准。',
                 tags=['domestic', 'preset'],
+            ),
+            LLMPreset(
+                key='vertex-ai-official',
+                label='Vertex AI / Google Cloud 官方',
+                protocol='vertex-ai',
+                default_base_url='',
+                default_model='gemini-1.5-flash',
+                description='GCP Vertex AI 企业版接口。需配置 GOOGLE_APPLICATION_CREDENTIALS 或通过 extra_body 传 project_id。',
+                tags=['official', 'enterprise'],
             ),
         ]
 
@@ -524,6 +533,14 @@ class LLMControlService:
                 base_url='https://generativelanguage.googleapis.com/v1beta',
                 model='',
             ),
+            LLMProfile(
+                id='vertex-ai-official-default',
+                name='Vertex AI / GCP',
+                preset_key='vertex-ai-official',
+                protocol='vertex-ai',
+                base_url='',
+                model='gemini-1.5-flash',
+            ),
         ]
         active_profile_id = profiles[0].id
 
@@ -566,5 +583,14 @@ class LLMControlService:
                 'model': (os.getenv('ARK_MODEL') or '').strip(),
             })
             active_profile_id = profiles[0].id
+        elif os.getenv('GCP_PROJECT_ID') or os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
+            profiles[3] = profiles[3].model_copy(update={
+                'model': (os.getenv('GCP_MODEL') or '').strip() or profiles[3].model,
+                'extra_body': {
+                    'project_id': (os.getenv('GCP_PROJECT_ID') or '').strip(),
+                    'region': (os.getenv('GCP_REGION') or '').strip() or 'us-central1'
+                }
+            })
+            active_profile_id = profiles[3].id
 
         return LLMControlConfig(version=1, active_profile_id=active_profile_id, profiles=profiles)

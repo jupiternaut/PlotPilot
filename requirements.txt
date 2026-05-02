@@ -31,7 +31,10 @@ volcengine-python-sdk[ark]>=1.0.0
 # ── 工具库 ──
 python-dotenv>=1.0.0
 json-repair>=0.30.0
-google-genai>=1.0.0
+
+# ── 扩展服务 (可选，按需安装) ──
+# Vertex AI 模式请安装: pip install -r requirements-vertex.txt
+# 本地模型模式请安装: pip install -r requirements-local.txt
 
 # ── 导出（DOCX / EPUB / PDF）──
 python-docx>=1.1.0

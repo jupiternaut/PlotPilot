@@ -24,3 +24,9 @@ try:
     __all__.append("GeminiProvider")
 except ModuleNotFoundError:
     GeminiProvider = None
+
+try:
+    from .vertex_ai_provider import VertexAIProvider
+    __all__.append("VertexAIProvider")
+except ModuleNotFoundError:
+    VertexAIProvider = None

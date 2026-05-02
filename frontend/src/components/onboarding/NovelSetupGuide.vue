@@ -812,17 +812,12 @@ async function startBibleGeneration() {
       biblePollEpoch.value += 1
       clearGenerationTimers()
       generatingBible.value = false
-<<<<<<< HEAD
-      bibleError.value = '生成超时，请稍后在工作台手动重试'
-    }, 300000) // 延长至 5 分钟
-=======
       bibleError.value = [
         `本步等待超时（向导界面最多等待约 ${WIZARD_STEP_TIMEOUT_SECONDS} 秒）。`,
         '常见原因：模型较慢、思考链、网关排队，或 AI 控制台里「超时」设得过短。',
         '后台任务可能仍在执行——请到工作台打开 Bible 查看是否已生成；也可在 Bible 中手动触发生成/重试。',
       ].join('\n')
     }, WIZARD_BIBLE_POLL_DEADLINE_MS)
->>>>>>> upstream/master
 
     schedulePoll(0)
   } catch (error: unknown) {
@@ -936,28 +931,12 @@ watch(
   () => props.show,
   async (val) => {
     if (val) {
-<<<<<<< HEAD
-      currentStep.value = 1
-      stepStatus.value = 'process'
-      plotOptions.value = []
-      mainPlotCommitted.value = false
-      customMode.value = false
-      customLogline.value = ''
-      plotSuggestError.value = ''
-      
-      // 首先同步状态，看是否已经生成过
-      await syncGenerationState()
-      
-      // 只有在完全没有生成过世界观时才启动自动生成
-      if (!bibleGenerated.value && !generatingBible.value) {
-=======
       resetWizardStateForOpen()
       // 检查已有进度，确定从哪一步继续
       const step = await detectWizardProgress()
       currentStep.value = step
       // 只有在第 1 步且世界观未生成时才启动生成
       if (step === 1 && !bibleGenerated.value) {
->>>>>>> upstream/master
         void startBibleGeneration()
       }
     } else {
@@ -993,41 +972,6 @@ const handleNext = async () => {
     step2PollEpoch.value += 1
     const epoch2 = step2PollEpoch.value
     currentStep.value = 2
-<<<<<<< HEAD
-    if (!charactersGenerated.value && !generatingCharacters.value) {
-      generatingCharacters.value = true
-      try {
-        console.log('[NovelSetupGuide] Starting character generation...')
-        await bibleApi.generateBible(props.novelId, 'characters')
-        
-        // 轮询逻辑
-        const poll = async () => {
-          if (!generatingCharacters.value) return
-          try {
-            console.log(`[NovelSetupGuide] Polling characters for novel: ${props.novelId}`)
-            const bible = await bibleApi.getBible(props.novelId)
-            console.log('[NovelSetupGuide] Characters poll response:', bible.characters?.length)
-            
-            if (bible.characters && bible.characters.length > 0) {
-              bibleData.value = bible
-              generatingCharacters.value = false
-              charactersGenerated.value = true
-              message.success('人物生成完成')
-            } else {
-              characterPollTimer.value = window.setTimeout(poll, 2000)
-            }
-          } catch (e) {
-            console.warn('[NovelSetupGuide] Character poll failed:', e)
-            characterPollTimer.value = window.setTimeout(poll, 3000)
-          }
-        }
-        void poll()
-      } catch (error) {
-        console.error('Failed to start character generation:', error)
-        generatingCharacters.value = false
-        message.error('启动人物生成失败')
-      }
-=======
     // 如果人物已存在，跳过生成
     if (charactersGenerated.value) {
       return
@@ -1065,47 +1009,11 @@ const handleNext = async () => {
       charactersError.value = isLikelyTimeoutError(error)
         ? '提交人物生成超时，请检查网络与 API 后再试。'
         : formatApiError(error) || '人物生成启动失败'
->>>>>>> upstream/master
     }
   } else if (currentStep.value === 2) {
     step3PollEpoch.value += 1
     const epoch3 = step3PollEpoch.value
     currentStep.value = 3
-<<<<<<< HEAD
-    if (!locationsGenerated.value && !generatingLocations.value) {
-      generatingLocations.value = true
-      try {
-        console.log('[NovelSetupGuide] Starting location generation...')
-        await bibleApi.generateBible(props.novelId, 'locations')
-        
-        // 轮询逻辑
-        const poll = async () => {
-          if (!generatingLocations.value) return
-          try {
-            console.log(`[NovelSetupGuide] Polling locations for novel: ${props.novelId}`)
-            const bible = await bibleApi.getBible(props.novelId)
-            console.log('[NovelSetupGuide] Locations poll response:', bible.locations?.length)
-            
-            if (bible.locations && bible.locations.length > 0) {
-              bibleData.value = bible
-              generatingLocations.value = false
-              locationsGenerated.value = true
-              message.success('地图生成完成')
-            } else {
-              locationPollTimer.value = window.setTimeout(poll, 2000)
-            }
-          } catch (e) {
-            console.warn('[NovelSetupGuide] Location poll failed:', e)
-            locationPollTimer.value = window.setTimeout(poll, 3000)
-          }
-        }
-        void poll()
-      } catch (error) {
-        console.error('Failed to start location generation:', error)
-        generatingLocations.value = false
-        message.error('启动地点生成失败')
-      }
-=======
     // 如果地点已存在，跳过生成
     if (locationsGenerated.value) {
       return
@@ -1143,7 +1051,6 @@ const handleNext = async () => {
       locationsError.value = isLikelyTimeoutError(error)
         ? '提交地图生成超时，请检查网络与 API 后再试。'
         : formatApiError(error) || '地图生成启动失败'
->>>>>>> upstream/master
     }
   } else if (currentStep.value < 5) {
     currentStep.value++

@@ -10,6 +10,7 @@ from infrastructure.ai.providers.anthropic_provider import AnthropicProvider
 from infrastructure.ai.providers.gemini_provider import GeminiProvider
 from infrastructure.ai.providers.mock_provider import MockProvider
 from infrastructure.ai.providers.openai_provider import OpenAIProvider
+from infrastructure.ai.providers.vertex_ai_provider import VertexAIProvider
 from infrastructure.ai.url_utils import (
     normalize_anthropic_base_url,
     normalize_gemini_base_url,
@@ -36,6 +37,8 @@ class LLMProviderFactory:
             return AnthropicProvider(settings)
         if resolved.protocol == 'gemini':
             return GeminiProvider(settings)
+        if resolved.protocol == 'vertex-ai':
+            return VertexAIProvider(settings)
         return OpenAIProvider(settings)
 
     def create_active_provider(self) -> LLMService:
@@ -46,6 +49,9 @@ class LLMProviderFactory:
             normalized_base_url = normalize_anthropic_base_url(profile.base_url)
         elif profile.protocol == 'gemini':
             normalized_base_url = normalize_gemini_base_url(profile.base_url)
+        elif profile.protocol == 'vertex-ai':
+            # Vertex AI 的 URL 通常是动态生成的，但如果用户提供了自定义的 base_url，我们也保留它
+            normalized_base_url = profile.base_url
         else:
             normalized_base_url = normalize_openai_base_url(profile.base_url)
 
