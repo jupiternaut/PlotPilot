@@ -26,8 +26,7 @@ class GeminiProvider(BaseProvider):
     
     加固策略：
     1. 采用 httpx.AsyncHTTPTransport 显式配置代理。
-    2. 锁定 127.0.0.1:10808 作为混合代理通道。
-    3. 支持 Pydantic Schema 校验，确保生成内容结构化。
+    2. 支持 Pydantic Schema 校验，确保生成内容结构化。
     """
     def __init__(self, settings: Settings):
         super().__init__(settings)
@@ -36,13 +35,26 @@ class GeminiProvider(BaseProvider):
         self.base_url = (settings.base_url or DEFAULT_BASE_URL).rstrip('/')
         
         # 优先从环境变量获取代理配置，实现灵活切换
-        self.proxy_url = os.getenv("PROXY_URL")
-        if self.proxy_url:
-            logger.info(f"GeminiProvider initialized with proxy: {self.proxy_url}")
-            self._transport = httpx.AsyncHTTPTransport(proxy=self.proxy_url)
+        proxy_url = os.getenv("PROXY_URL")
+        transport = None
+        if proxy_url:
+            logger.info(f"GeminiProvider initialized with proxy: {proxy_url}")
+            transport = httpx.AsyncHTTPTransport(proxy=proxy_url)
         else:
             logger.info("GeminiProvider initialized without proxy (direct connection)")
-            self._transport = None
+
+        # 长生命周期 httpx client（跨请求复用连接池）
+        # 🔥 分层超时：避免 API 卡住时整个进程挂起
+        self._http_client = httpx.AsyncClient(
+            transport=transport,
+            timeout=httpx.Timeout(
+                connect=settings.connect_timeout,
+                read=settings.read_timeout,
+                write=60.0,
+                pool=30.0,
+            ),
+            trust_env=False,
+        )
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
         model_id = require_resolved_model_id(
@@ -53,19 +65,16 @@ class GeminiProvider(BaseProvider):
         payload = self._build_payload(prompt, config)
         query = self._build_query()
         url = self._build_url(model_id, 'generateContent')
-        timeout = httpx.Timeout(self.settings.timeout_seconds)
 
-        # 使用预构的传输层，物理性消除 str 对象的 Attribute 报错
-        async with httpx.AsyncClient(transport=self._transport, timeout=timeout, trust_env=False) as client:
-            logger.info(f"Final Gemini API Request URL: {url}")
-            response = await client.post(
-                url,
-                params=query,
-                headers=self._build_headers(stream=False),
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+        logger.info(f"Final Gemini API Request URL: {url}")
+        response = await self._http_client.post(
+            url,
+            params=query,
+            headers=self._build_headers(stream=False),
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
 
         content = self._extract_text(data)
         if not content.strip():
@@ -96,25 +105,23 @@ class GeminiProvider(BaseProvider):
         payload = self._build_payload(prompt, config)
         query = self._build_query({'alt': 'sse'})
         url = self._build_url(model_id, 'streamGenerateContent')
-        timeout = httpx.Timeout(self.settings.timeout_seconds)
 
-        async with httpx.AsyncClient(transport=self._transport, timeout=timeout, trust_env=False) as client:
-            async with client.stream(
-                'POST',
-                url,
-                params=query,
-                headers=self._build_headers(stream=True),
-                json=payload,
-            ) as response:
-                response.raise_for_status()
-                buffer = ''
-                async for chunk in response.aiter_text():
-                    buffer += chunk.replace('\r\n', '\n')
-                    while '\n\n' in buffer:
-                        event_text, buffer = buffer.split('\n\n', 1)
-                        text = self._parse_sse_event(event_text)
-                        if text:
-                            yield text
+        async with self._http_client.stream(
+            'POST',
+            url,
+            params=query,
+            headers=self._build_headers(stream=True),
+            json=payload,
+        ) as response:
+            response.raise_for_status()
+            buffer = ''
+            async for chunk in response.aiter_text():
+                buffer += chunk.replace('\r\n', '\n')
+                while '\n\n' in buffer:
+                    event_text, buffer = buffer.split('\n\n', 1)
+                    text = self._parse_sse_event(event_text)
+                    if text:
+                        yield text
 
     def _build_url(self, model: str, action: str) -> str:
         """构建完整的 Gemini API URL。
@@ -167,6 +174,22 @@ class GeminiProvider(BaseProvider):
             ]
         ]
         
+        # 🔥 response_format 自适应：
+        # Gemini 支持 responseMimeType 但不支持 json_schema 结构定义
+        # OpenAI 的 json_object → Gemini 的 responseMimeType: application/json
+        # OpenAI 的 json_schema → Gemini 的 responseMimeType + responseSchema
+        if config.response_format:
+            fmt = config.response_format
+            if isinstance(fmt, dict):
+                if fmt.get("type") == "json_object":
+                    generation_config["responseMimeType"] = "application/json"
+                elif fmt.get("type") == "json_schema":
+                    generation_config["responseMimeType"] = "application/json"
+                    # 如果 json_schema 中有 schema 定义，传递给 Gemini
+                    schema = fmt.get("json_schema", {}).get("schema")
+                    if schema:
+                        generation_config["responseSchema"] = schema
+
         payload: dict[str, Any] = {
             'contents': [
                 {
@@ -178,7 +201,7 @@ class GeminiProvider(BaseProvider):
             'safetySettings': safety_settings,
         }
 
-        if config.response_format:
+        if config.response_format and not generation_config.get("responseMimeType"):
             payload['generationConfig']['responseMimeType'] = 'application/json'
 
         if prompt.system.strip():
