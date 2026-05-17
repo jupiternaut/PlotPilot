@@ -646,7 +646,6 @@ const updateTimeText = computed(() => formatTime(lastUpdateTime.value))
   );
   border-color: color-mix(in srgb, var(--color-brand, #4f46e5) 38%, transparent);
 }
-}
 
 .action-btn:hover {
   filter: none;

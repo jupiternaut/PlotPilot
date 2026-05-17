@@ -211,8 +211,8 @@ async def generate_bible(
             # 构建 Bible 摘要供 Knowledge 生成使用
             chars = bible_data.get("characters", [])
             locs = bible_data.get("locations", [])
-            char_desc = "、".join(f"{c['name']}（{c.get('role', '')}）" for c in chars[:5])
-            loc_desc = "、".join(c['name'] for c in locs[:3])
+            char_desc = "、".join(f"{c.get('name', '未命名角色')}（{c.get('role', '')}）" for c in chars[:5])
+            loc_desc = "、".join(c.get('name', '未命名地点') for c in locs[:3])
             bible_summary = f"主要角色：{char_desc}。重要地点：{loc_desc}。文风：{bible_data.get('style', '')}。"
 
             # 生成初始 Knowledge
@@ -445,17 +445,22 @@ async def _sse_bible_generator(
                     if character_id in used_char_ids:
                         character_id = f"{novel_id}-char-{idx+1}-{len(used_char_ids)}"
                     used_char_ids.add(character_id)
+                    # 增强鲁棒性：兼容多种可能的字段名
+                    char_name = char_data.get("name") or char_data.get("角色名") or char_data.get("姓名") or char_data.get("CharacterName") or char_data.get("Name") or "未命名角色"
+                    char_role = char_data.get("role") or char_data.get("身份") or char_data.get("定位") or char_data.get("Role") or ""
+                    char_desc = char_data.get("description") or char_data.get("简介") or char_data.get("描述") or char_data.get("Background") or char_data.get("background") or "暂无描述"
+                    
                     try:
                         bible_generator.bible_service.add_character(
                             novel_id=novel_id,
                             character_id=character_id,
-                            name=char_data["name"],
-                            description=f"{char_data.get('role', '')} - {char_data.get('description', '')}",
-                            relationships=char_data.get("relationships", []),
+                            name=char_name,
+                            description=f"{char_role} - {char_desc}",
+                            relationships=char_data.get("relationships") or char_data.get("关系") or [],
                         )
                         character_ids.append((character_id, char_data))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Failed to add character to bible: {e}")
                 elif item["type"] == "chunk":
                     # 透传 LLM 原始 chunk（前端可用于打字效果）
                     yield _sse_fmt("data", {
@@ -529,8 +534,8 @@ async def _sse_bible_generator(
             if bible:
                 chars = bible.characters or []
                 locs = bible.locations or []
-                char_desc = "、".join(f"{c.name}" for c in chars[:5])
-                loc_desc = "、".join(c.name for c in locs[:3])
+                char_desc = "、".join(f"{getattr(c, 'name', '未命名角色')}" for c in chars[:5])
+                loc_desc = "、".join(getattr(c, 'name', '未命名地点') for c in locs[:3])
                 style_notes = bible.style_notes or []
                 style_text = "；".join(n.content for n in style_notes if n.content)
                 bible_summary = f"主要角色：{char_desc}。重要地点：{loc_desc}。文风：{style_text}。"

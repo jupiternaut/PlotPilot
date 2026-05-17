@@ -436,11 +436,11 @@ class AutoBibleGenerator:
             prepared.append(
                 {
                     "location_id": location_id,
-                    "name": loc_data["name"],
-                    "description": loc_data["description"],
-                    "location_type": loc_data.get("type", "场景"),
-                    "connections": loc_data.get("connections", []),
-                    "raw_parent_id": loc_data.get("parent_id"),
+                    "name": loc_data.get("name") or loc_data.get("地点名") or loc_data.get("名称") or loc_data.get("id") or f"地点 {idx+1}",
+                    "description": loc_data.get("description") or loc_data.get("简介") or loc_data.get("描述") or loc_data.get("function") or "暂无描述",
+                    "location_type": loc_data.get("type") or loc_data.get("location_type") or loc_data.get("类型") or "场景",
+                    "connections": loc_data.get("connections") or loc_data.get("连接") or [],
+                    "raw_parent_id": loc_data.get("parent_id") or loc_data.get("父级ID"),
                 }
             )
 
@@ -589,6 +589,7 @@ class AutoBibleGenerator:
 
             # 基于已有世界观生成人物
             existing_worldbuilding = self._load_worldbuilding(novel_id)
+            wb_summary = json.dumps(existing_worldbuilding, ensure_ascii=False)
             bible_data = await self._generate_characters(premise, target_chapters, existing_worldbuilding)
             chars_payload = bible_data.get("characters") or []
             if not chars_payload:
@@ -609,12 +610,16 @@ class AutoBibleGenerator:
                 
                 used_char_ids.add(character_id)
                 try:
+                    char_name = char_data.get("name") or char_data.get("角色名") or char_data.get("姓名") or char_data.get("Name") or "未命名角色"
+                    char_role = char_data.get("role") or char_data.get("身份") or char_data.get("定位") or char_data.get("Role") or "配角"
+                    char_desc = char_data.get("description") or char_data.get("简介") or char_data.get("描述") or char_data.get("Background") or "暂无背景描述"
+                    
                     self.bible_service.add_character(
                         novel_id=novel_id,
                         character_id=character_id,
-                        name=char_data["name"],
-                        description=f"{char_data['role']} - {char_data['description']}",
-                        relationships=char_data.get("relationships", [])
+                        name=char_name,
+                        description=f"{char_role} - {char_desc}",
+                        relationships=char_data.get("relationships") or char_data.get("关系") or []
                     )
                     character_ids.append((character_id, char_data))
                     logger.info(f"Character saved: {character_id}")
@@ -825,11 +830,15 @@ JSON 格式（不要有其他文字）：
             
             used_character_ids.add(character_id)
             try:
+                char_name = char_data.get("name") or char_data.get("角色名") or char_data.get("姓名") or char_data.get("Name") or "未命名角色"
+                char_role = char_data.get("role") or char_data.get("身份") or char_data.get("定位") or char_data.get("Role") or "角色"
+                char_desc = char_data.get("description") or char_data.get("简介") or char_data.get("描述") or char_data.get("Background") or "暂无描述"
+                
                 self.bible_service.add_character(
                     novel_id=novel_id,
                     character_id=character_id,
-                    name=char_data["name"],
-                    description=f"{char_data['role']} - {char_data['description']}"
+                    name=char_name,
+                    description=f"{char_role} - {char_desc}"
                 )
                 logger.info(f"Character saved: {character_id}")
             except Exception as e:
@@ -1197,7 +1206,7 @@ JSON 格式：
 
 请生成世界观的「{dim_label}」维度。{context_block}
 
-请严格按照以下JSON格式输出，字段名不要修改，可以被Python json.loads函数解析。只给出JSON，不作解释，不作答：
+请按照以下json格式进行输出，可以被Python json.loads函数解析。只给出JSON，不作解释，不作答：
 ```json
 {{
 {fields_desc}
@@ -1480,11 +1489,19 @@ JSON 格式：
 {wb_summary}
 
 请基于这个世界观生成主要人物。
+**注意：每个角色必须包含 "name", "role", "description" 字段，且内容不能为空。**
 
 请按照以下json格式进行输出，可以被Python json.loads函数解析。只给出JSON，不作解释，不作答：
 ```json
 {{
-  "characters": []
+  "characters": [
+    {{
+      "name": "角色姓名",
+      "role": "主角/配角/对手/导师",
+      "description": "性格背景、目标动机、外貌特征详述",
+      "relationships": []
+    }}
+  ]
 }}
 ```""" + _BIBLE_CHARACTERS_NAMING_USER_SUFFIX
 
@@ -1515,11 +1532,23 @@ JSON 格式：
 {wb_summary}
 
 请基于这个世界观生成主要人物。
-
-请按照以下json格式进行输出，可以被Python json.loads函数解析。只给出JSON，不作解释，不作答：
+请严格按照以下 JSON 格式输出，字段名必须为英文：
 ```json
 {{
-  "characters": []
+  "characters": [
+    {{
+      "name": "Character Name",
+      "role": "Role (Protag/Antag/etc)",
+      "description": "Character background and personality",
+      "relationships": [
+        {{
+          "target": "Target Name",
+          "relation": "Relation type",
+          "description": "Relation details"
+        }}
+      ]
+    }}
+  ]
 }}
 ```""" + _BIBLE_CHARACTERS_NAMING_USER_SUFFIX
         prompt = Prompt(system=system_prompt, user=user_prompt)
@@ -1639,11 +1668,25 @@ JSON 格式：
 {char_summary}
 
 请基于世界观和人物生成完整地图。
-
-请按照以下json格式进行输出，可以被Python json.loads函数解析。只给出JSON，不作解释，不作答：
+请严格按照以下 JSON 格式输出，字段名必须为英文：
 ```json
 {{
-  "locations": []
+  "locations": [
+    {{
+      "id": "loc_001",
+      "name": "Location Name",
+      "type": "City/Building/Wilderness",
+      "description": "Detailed description",
+      "parent_id": null,
+      "connections": [
+        {{
+          "target": "Target Name",
+          "relation": "connection type",
+          "description": "connection details"
+        }}
+      ]
+    }}
+  ]
 }}
 ```"""
         prompt = Prompt(system=system_prompt, user=user_prompt)
@@ -1764,7 +1807,11 @@ JSON 格式：
         logger.info(f"Generating character relationship triples for {novel_id}")
 
         # 创建人物名称到ID的映射
-        name_to_id = {char_data["name"]: char_id for char_id, char_data in character_ids}
+        # 构建名字到 ID 的映射，处理缺失 name 的情况
+        name_to_id = {}
+        for char_id, char_data in character_ids:
+            name = char_data.get("name") or char_data.get("id") or "未命名角色"
+            name_to_id[name] = char_id
         id_to_char = {cid: data for cid, data in character_ids}
 
         for char_id, char_data in character_ids:
@@ -1782,8 +1829,9 @@ JSON 格式：
 
                     # 简单的名称匹配
                     for other_id, other_data in character_ids:
-                        if other_id != char_id and other_data["name"] in rel:
-                            target_name = other_data["name"]
+                        other_name = other_data.get("name")
+                        if other_id != char_id and other_name and other_name in rel:
+                            target_name = other_name
                             break
 
                     # 提取关系类型
@@ -1823,7 +1871,7 @@ JSON 格式：
                         source_type=SourceType.BIBLE_GENERATED,
                         description=description,
                         attributes={
-                            "subject_label": char_data["name"],
+                            "subject_label": char_data.get("name") or char_data.get("id") or "未命名角色",
                             "object_label": target_name,
                             "subject_importance": subj_imp,
                             "object_importance": obj_imp,
@@ -1833,7 +1881,7 @@ JSON 格式：
                     )
                     try:
                         await self.triple_repository.save(triple)
-                        logger.info(f"Created triple: {char_data['name']} -{predicate}-> {target_name}")
+                        logger.info(f"Created triple: {char_data.get('name', '未命名角色')} -{predicate}-> {target_name}")
                     except Exception as e:
                         logger.error(f"Failed to save triple: {e}")
 
@@ -1842,7 +1890,10 @@ JSON 格式：
         logger.info(f"Generating location connection triples for {novel_id}")
 
         # 创建地点名称到ID的映射
-        name_to_id = {loc_data["name"]: loc_id for loc_id, loc_data in location_ids}
+        name_to_id = {}
+        for loc_id, loc_data in location_ids:
+            lname = loc_data.get("name") or loc_data.get("id") or "未命名地点"
+            name_to_id[lname] = loc_id
         id_to_loc = {lid: data for lid, data in location_ids}
 
         for loc_id, loc_data in location_ids:
@@ -1905,7 +1956,7 @@ JSON 格式：
                         source_type=SourceType.BIBLE_GENERATED,
                         description=description,
                         attributes={
-                            "subject_label": loc_data["name"],
+                            "subject_label": loc_data.get("name") or loc_data.get("id") or "未命名地点",
                             "object_label": target_name,
                             "subject_importance": subj_imp,
                             "subject_location_type": subj_lt,
@@ -1917,7 +1968,7 @@ JSON 格式：
                     )
                     try:
                         await self.triple_repository.save(triple)
-                        logger.info(f"Created triple: {loc_data['name']} -{predicate}-> {target_name}")
+                        logger.info(f"Created triple: {loc_data.get('name', '未命名地点')} -{predicate}-> {target_name}")
                     except Exception as e:
                         logger.error(f"Failed to save triple: {e}")
 
