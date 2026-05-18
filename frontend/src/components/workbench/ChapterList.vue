@@ -1,12 +1,22 @@
 <template>
   <aside class="sidebar">
     <div class="sidebar-head">
-      <n-button quaternary size="small" class="back-btn" @click="handleBack">
-        <template #icon>
-          <span class="ico-arrow">←</span>
-        </template>
-        书目列表
-      </n-button>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <n-button quaternary size="small" class="back-btn" style="margin-bottom: 0;" @click="handleBack">
+          <template #icon>
+            <span class="ico-arrow">←</span>
+          </template>
+          书目列表
+        </n-button>
+        
+        <n-dropdown :options="resetOptions" @select="handleResetSelect">
+          <n-button quaternary circle size="small" type="warning" title="重置与清空选项">
+            <template #icon>
+              <span style="font-size: 14px; display: inline-flex; align-items: center; justify-content: center; height: 100%;">⚙️</span>
+            </template>
+          </n-button>
+        </n-dropdown>
+      </div>
 
       <!-- 视图模式切换 -->
       <div class="view-mode-row">
@@ -86,10 +96,14 @@
 
 <script setup lang="ts">
 import { ref, computed, type ComponentPublicInstance } from 'vue'
+import { useRouter } from 'vue-router'
+import { useDialog, useMessage, NDropdown } from 'naive-ui'
 import StoryStructureTree from '@/components/StoryStructureTree.vue'
 import MacroPlanModal from '@/components/workbench/MacroPlanModal.vue'
 import type { GenerationPrefsDTO } from '@/api/novel'
+import { novelApi } from '@/api/novel'
 import { narrativeOrdinalLabel, narrativeUnitNoun } from '@/utils/narrativeUnitLabel'
+import { clearWizardUiCache } from '@/utils/wizardStageCache'
 
 const INITIAL_VISIBLE_COUNT = 50
 const LOAD_MORE_STEP = 50
@@ -121,11 +135,78 @@ const emit = defineEmits<{
   planAct: [actId: string, actTitle: string]
 }>()
 
+const router = useRouter()
 const viewMode = ref('tree')
 const viewModeOptions = [
   { label: '树形视图', value: 'tree' },
   { label: '平铺视图', value: 'flat' }
 ]
+
+const dialog = useDialog()
+const message = useMessage()
+
+const resetOptions = [
+  {
+    label: '🧹 仅清空已生成正文（保留大纲）',
+    key: 'clear-drafts'
+  },
+  {
+    label: '🔥 彻底重设（清空正文与大纲树）',
+    key: 'clear-outline'
+  }
+]
+
+const handleResetSelect = (key: string) => {
+  if (key === 'clear-drafts') {
+    dialog.warning({
+      title: '清空已生成正文',
+      content: '此操作将永久删除所有已生成的章节正文，并将章节状态重置为「草稿」！大纲骨架、角色卡和世界观设定将予以保留。确定要清空吗？',
+      positiveText: '确定清空',
+      negativeText: '取消',
+      onPositiveClick: async () => {
+        try {
+          const res = await novelApi.clearDrafts(props.slug)
+          if (res.success) {
+            message.success('已清空所有章节正文，大纲保留完整')
+            // 清除当前活跃章节，避免编辑器展示旧内容
+            emit('select', -1, '')
+            emit('refresh')
+            refreshStoryTree()
+          } else {
+            message.error(res.message || '清空失败')
+          }
+        } catch (err: any) {
+          message.error(err.response?.data?.detail || err.message || '清空失败')
+        }
+      }
+    })
+  } else if (key === 'clear-outline') {
+    dialog.warning({
+      title: '彻底重设小说',
+      content: '警告：此操作将永久删除所有已生成的章节正文、结构大纲树、故事线和剧情点，并将书目重置为初始「规划中」状态！角色卡和世界观设定将予以保留。此操作不可撤销，确定要重设吗？',
+      positiveText: '确定重设',
+      negativeText: '取消',
+      onPositiveClick: async () => {
+        try {
+          const res = await novelApi.clearOutline(props.slug)
+          if (res.success) {
+            message.success('已彻底重置小说，即将跳转到新书向导…')
+            // 清除本地向导完成标记，让新书向导重新激活
+            clearWizardUiCache(props.slug)
+            // 延迟一拍让 message 先显示，再跳转
+            setTimeout(() => {
+              router.replace({ name: 'NovelSetup', params: { slug: props.slug } })
+            }, 800)
+          } else {
+            message.error(res.message || '重置失败')
+          }
+        } catch (err: any) {
+          message.error(err.response?.data?.detail || err.message || '重置失败')
+        }
+      }
+    })
+  }
+}
 
 const visibleCount = ref(INITIAL_VISIBLE_COUNT)
 const visibleChapters = computed(() => props.chapters.slice(0, visibleCount.value))

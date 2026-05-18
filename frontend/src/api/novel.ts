@@ -211,4 +211,26 @@ export const novelApi = {
       params: { format },
       responseType: 'blob'
     }) as Promise<Blob>,
+
+  /**
+   * Clone/Duplicate a novel
+   * POST /api/v1/novels/{novelId}/duplicate
+   */
+  duplicateNovel: (novelId: string, title: string) =>
+    apiClient.post<{ success: boolean; new_novel_id: string; message: string }>(`/novels/${novelId}/duplicate`, { title }) as Promise<{ success: boolean; new_novel_id: string; message: string }>,
+
+  /**
+   * Clear drafts for a novel (Choice 1)
+   * POST /api/v1/novels/{novelId}/clear-drafts
+   */
+  clearDrafts: (novelId: string) =>
+    apiClient.post<{ success: boolean; message: string }>(`/novels/${novelId}/clear-drafts`) as Promise<{ success: boolean; message: string }>,
+
+  /**
+   * Clear outline and reset a novel (Choice 2)
+   * POST /api/v1/novels/{novelId}/clear-outline
+   */
+  clearOutline: (novelId: string) =>
+    apiClient.post<{ success: boolean; message: string }>(`/novels/${novelId}/clear-outline`) as Promise<{ success: boolean; message: string }>,
 }
+

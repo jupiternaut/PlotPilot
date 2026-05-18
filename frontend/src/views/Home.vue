@@ -242,8 +242,23 @@
                   <div class="card-actions" @click.stop>
                     <n-checkbox
                       :checked="selectedBooks.includes(book.slug)"
+                      style="margin-right: auto;"
                       @update:checked="(val: boolean) => toggleBookSelection(book.slug, val)"
                     />
+                    <n-button
+                      quaternary
+                      circle
+                      size="tiny"
+                      type="warning"
+                      :loading="duplicatingSlug === book.slug"
+                      title="克隆书目"
+                      aria-label="克隆书目"
+                      @click="() => handleDuplicateBook(book.slug, book.title)"
+                    >
+                      <template #icon>
+                        <n-icon><IconCopy /></n-icon>
+                      </template>
+                    </n-button>
                     <n-popconfirm
                       positive-text="删除"
                       negative-text="取消"
@@ -378,7 +393,22 @@
                 <span>{{ formatWordCount(book.word_count) }}</span>
               </template>
             </div>
-            <div class="card-actions" @click.stop>
+             <div class="card-actions" @click.stop>
+              <n-button
+                quaternary
+                circle
+                size="tiny"
+                type="warning"
+                :loading="duplicatingSlug === book.slug"
+                title="克隆书目"
+                aria-label="克隆书目"
+                style="margin-right: 4px;"
+                @click="() => handleDuplicateBook(book.slug, book.title)"
+              >
+                <template #icon>
+                  <n-icon><IconCopy /></n-icon>
+                </template>
+              </n-button>
               <n-popconfirm
                 positive-text="删除"
                 negative-text="取消"
@@ -411,9 +441,9 @@
 <script setup lang="ts">
 import { h, ref, onMounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMessage, NIcon } from 'naive-ui'
+import { useMessage, NIcon, useDialog, NInput } from 'naive-ui'
 import { novelApi, type NovelDTO } from '../api/novel'
-import { isWizardCompleted } from '@/utils/wizardStageCache'
+import { isWizardCompleted, markWizardCompleted } from '@/utils/wizardStageCache'
 import StatsSidebar from '@/components/stats/StatsSidebar.vue'
 import NovelSetupGuide from '@/components/onboarding/NovelSetupGuide.vue'
 import { useAppSettingsShellStore } from '@/stores/appSettingsShellStore'
@@ -433,6 +463,10 @@ const IconSearch = () =>
 const IconTrash = () =>
   h('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', width: '1em', height: '1em' },
     h('path', { fill: 'currentColor', d: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z' }))
+
+const IconCopy = () =>
+  h('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', width: '1em', height: '1em' },
+    h('path', { fill: 'currentColor', d: 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z' }))
 
 const IconChevronDown = () =>
   h('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', width: '1em', height: '1em' },
@@ -462,6 +496,7 @@ interface BookListItem {
 
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const statsStore = useStatsStore()
 const appSettingsShell = useAppSettingsShellStore()
 
@@ -469,6 +504,53 @@ const createInputRef = ref<any>(null)
 const showAdvanced = ref(false)
 const creating = ref(false)
 const loading = ref(false)
+const duplicatingSlug = ref<string | null>(null)
+
+const handleDuplicateBook = (slug: string, currentTitle: string) => {
+  const newTitleRef = ref(`${currentTitle} (副本)`)
+  dialog.info({
+    title: '克隆书目',
+    content: () => h('div', { style: 'margin-top: 10px;' }, [
+      h('div', { style: 'margin-bottom: 8px; font-size: 13px; color: var(--app-text-muted);' }, '请输入克隆后的新书目标题：'),
+      h(NInput, {
+        value: newTitleRef.value,
+        placeholder: '新小说标题',
+        onUpdateValue: (val) => {
+          newTitleRef.value = val
+        }
+      })
+    ]),
+    positiveText: '开始克隆',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const val = newTitleRef.value.trim()
+      if (!val) {
+        message.warning('新小说标题不能为空')
+        return false
+      }
+      
+      duplicatingSlug.value = slug
+      try {
+        const res = await novelApi.duplicateNovel(slug, val)
+        if (res.success) {
+          const originalBook = books.value.find(b => b.slug === slug)
+          if (isWizardCompleted(slug) || (originalBook && originalBook.stage !== 'planning')) {
+            markWizardCompleted(res.new_novel_id)
+          }
+          message.success('书目克隆成功')
+          await fetchBooks()
+          await statsStore.loadGlobalStats(true)
+        } else {
+          message.error(res.message || '克隆失败')
+        }
+      } catch (err: any) {
+        message.error(err.response?.data?.detail || err.message || '克隆失败')
+      } finally {
+        duplicatingSlug.value = null
+      }
+    }
+  })
+}
 
 const SIDEBAR_COLLAPSED_KEY = 'plotpilot_sidebar_collapsed'
 const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
@@ -673,10 +755,9 @@ const handleSetupSkip = () => {
 }
 
 const navigateToBook = (novelId: string) => {
-  // 未完成向导的书重新打开向导
-  if (!isWizardCompleted(novelId)) {
-    // 查找该书的 target_chapters
-    const novel = books.value.find(b => b.slug === novelId)
+  const novel = books.value.find(b => b.slug === novelId)
+  // 未完成向导且仍然是规划中的书重新打开向导；如果已经进入后续阶段（如写作、审稿中），则无需向导直接进工作台
+  if (!isWizardCompleted(novelId) && (!novel || novel.stage === 'planning')) {
     setupWizard.value = {
       novelId,
       targetChapters: 100, // 默认值，向导内部会从 API 获取真实值

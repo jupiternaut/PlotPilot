@@ -373,3 +373,83 @@ async def get_novel_statistics(
         return service.get_novel_statistics(novel_id)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class DuplicateNovelRequest(BaseModel):
+    """复制小说请求"""
+    title: str = Field(..., description="新克隆的小说标题")
+
+
+@router.post("/{novel_id}/duplicate")
+async def duplicate_novel(
+    novel_id: str,
+    request: DuplicateNovelRequest,
+    service: NovelService = Depends(get_novel_service)
+):
+    """克隆/复制整本小说及其相关的所有子表数据和物理资产"""
+    novel = service.get_novel(novel_id)
+    if not novel:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    
+    if novel.autopilot_status == "running":
+        raise HTTPException(status_code=400, detail="Cannot duplicate a novel while autopilot is running")
+
+    try:
+        new_novel_id = service.duplicate_novel(novel_id, request.title)
+        return {
+            "success": True,
+            "new_novel_id": new_novel_id,
+            "message": f"Successfully duplicated novel to {new_novel_id}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to duplicate novel {novel_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to duplicate novel: {str(e)}")
+
+
+@router.post("/{novel_id}/clear-drafts")
+async def clear_novel_drafts(
+    novel_id: str,
+    service: NovelService = Depends(get_novel_service)
+):
+    """仅清空已生成的章节正文，保留原大纲树结构"""
+    novel = service.get_novel(novel_id)
+    if not novel:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    
+    if novel.autopilot_status == "running":
+        raise HTTPException(status_code=400, detail="Cannot clear drafts while autopilot is running")
+
+    try:
+        service.clear_novel_drafts(novel_id)
+        return {
+            "success": True,
+            "message": "Successfully cleared all chapter drafts"
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear drafts for novel {novel_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to clear drafts: {str(e)}")
+
+
+@router.post("/{novel_id}/clear-outline")
+async def clear_novel_outline(
+    novel_id: str,
+    service: NovelService = Depends(get_novel_service)
+):
+    """彻底重置小说大纲树和正文，将小说重置回规划中状态"""
+    novel = service.get_novel(novel_id)
+    if not novel:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    
+    if novel.autopilot_status == "running":
+        raise HTTPException(status_code=400, detail="Cannot clear outline while autopilot is running")
+
+    try:
+        service.clear_novel_outline(novel_id)
+        return {
+            "success": True,
+            "message": "Successfully cleared outline and reset novel"
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear outline for novel {novel_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to clear outline: {str(e)}")
+
