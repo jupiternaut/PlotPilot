@@ -17,6 +17,10 @@ from application.ai.llm_control_service import (
     LLMTestResult,
     LLMControlService,
 )
+from infrastructure.ai.codex_app_server_client import (
+    CodexAppServerError,
+    get_codex_app_server_client,
+)
 from infrastructure.ai.provider_factory import LLMProviderFactory
 from infrastructure.ai.prompt_manager import get_prompt_manager, BUILTIN_CATEGORIES
 
@@ -47,6 +51,20 @@ class ModelListResponse(BaseModel):
     success: bool = True
     items: List[ModelItem] = Field(default_factory=list)
     count: int = 0
+
+
+class CodexStatusResponse(BaseModel):
+    available: bool = False
+    authenticated: bool = False
+    requires_openai_auth: bool = False
+    email: Optional[str] = None
+    plan_type: Optional[str] = None
+    error: Optional[str] = None
+
+
+class CodexLoginStartResponse(BaseModel):
+    auth_url: str
+    login_id: str
 
 
 def _openai_compatible_models_base(base_url: str) -> str:
@@ -219,6 +237,37 @@ async def test_llm_profile(profile: LLMProfile) -> LLMTestResult:
     except Exception as exc:
         logger.error('测试 LLM 配置失败: %s', exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get('/codex/status', response_model=CodexStatusResponse)
+async def get_codex_status() -> CodexStatusResponse:
+    status = await get_codex_app_server_client().status()
+    return CodexStatusResponse(
+        available=status.available,
+        authenticated=status.authenticated,
+        requires_openai_auth=status.requires_openai_auth,
+        email=status.email,
+        plan_type=status.plan_type,
+        error=status.error,
+    )
+
+
+@router.post('/codex/login/start', response_model=CodexLoginStartResponse)
+async def start_codex_login() -> CodexLoginStartResponse:
+    try:
+        payload = await get_codex_app_server_client().start_chatgpt_login()
+        return CodexLoginStartResponse(**payload)
+    except CodexAppServerError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post('/codex/logout')
+async def logout_codex() -> Dict[str, bool]:
+    try:
+        await get_codex_app_server_client().logout()
+        return {'ok': True}
+    except CodexAppServerError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 # ======================================================================

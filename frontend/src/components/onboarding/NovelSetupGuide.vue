@@ -50,52 +50,62 @@
           >
             <template #core_rules>
               <div class="dimension-fields" v-if="worldbuildingData.core_rules && Object.keys(worldbuildingData.core_rules).length">
-                <div v-for="(val, key) in worldbuildingData.core_rules" :key="key"
-                  v-if="val && String(val).trim()"
-                  class="field-card" :class="{ 'field-card--streaming': activeDimension === 'core_rules' && activeField === key }">
-                  <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
-                  <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'core_rules' && activeField === key" class="streaming-cursor">▎</span></div>
-                </div>
+                <template v-for="(val, key) in worldbuildingData.core_rules" :key="key">
+                  <div
+                    v-if="val && String(val).trim()"
+                    class="field-card" :class="{ 'field-card--streaming': activeDimension === 'core_rules' && activeField === key }">
+                    <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
+                    <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'core_rules' && activeField === key" class="streaming-cursor">▎</span></div>
+                  </div>
+                </template>
               </div>
             </template>
             <template #geography>
               <div class="dimension-fields" v-if="worldbuildingData.geography && Object.keys(worldbuildingData.geography).length">
-                <div v-for="(val, key) in worldbuildingData.geography" :key="key"
-                  v-if="val && String(val).trim()"
-                  class="field-card" :class="{ 'field-card--streaming': activeDimension === 'geography' && activeField === key }">
-                  <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
-                  <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'geography' && activeField === key" class="streaming-cursor">▎</span></div>
-                </div>
+                <template v-for="(val, key) in worldbuildingData.geography" :key="key">
+                  <div
+                    v-if="val && String(val).trim()"
+                    class="field-card" :class="{ 'field-card--streaming': activeDimension === 'geography' && activeField === key }">
+                    <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
+                    <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'geography' && activeField === key" class="streaming-cursor">▎</span></div>
+                  </div>
+                </template>
               </div>
             </template>
             <template #society>
               <div class="dimension-fields" v-if="worldbuildingData.society && Object.keys(worldbuildingData.society).length">
-                <div v-for="(val, key) in worldbuildingData.society" :key="key"
-                  v-if="val && String(val).trim()"
-                  class="field-card" :class="{ 'field-card--streaming': activeDimension === 'society' && activeField === key }">
-                  <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
-                  <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'society' && activeField === key" class="streaming-cursor">▎</span></div>
-                </div>
+                <template v-for="(val, key) in worldbuildingData.society" :key="key">
+                  <div
+                    v-if="val && String(val).trim()"
+                    class="field-card" :class="{ 'field-card--streaming': activeDimension === 'society' && activeField === key }">
+                    <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
+                    <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'society' && activeField === key" class="streaming-cursor">▎</span></div>
+                  </div>
+                </template>
               </div>
             </template>
             <template #culture>
               <div class="dimension-fields" v-if="worldbuildingData.culture && Object.keys(worldbuildingData.culture).length">
-                <div v-for="(val, key) in worldbuildingData.culture" :key="key"
-                  v-if="val && String(val).trim()"
-                  class="field-card" :class="{ 'field-card--streaming': activeDimension === 'culture' && activeField === key }">
-                  <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
-                  <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'culture' && activeField === key" class="streaming-cursor">▎</span></div>
-                </div>
+                <template v-for="(val, key) in worldbuildingData.culture" :key="key">
+                  <div
+                    v-if="val && String(val).trim()"
+                    class="field-card" :class="{ 'field-card--streaming': activeDimension === 'culture' && activeField === key }">
+                    <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
+                    <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'culture' && activeField === key" class="streaming-cursor">▎</span></div>
+                  </div>
+                </template>
               </div>
             </template>
             <template #daily_life>
               <div class="dimension-fields" v-if="worldbuildingData.daily_life && Object.keys(worldbuildingData.daily_life).length">
-                <div v-for="(val, key) in worldbuildingData.daily_life" :key="key"
-                  v-if="val && String(val).trim()"
-                  class="field-card" :class="{ 'field-card--streaming': activeDimension === 'daily_life' && activeField === key }">
-                  <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
-                  <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'daily_life' && activeField === key" class="streaming-cursor">▎</span></div>
-                </div>
+                <template v-for="(val, key) in worldbuildingData.daily_life" :key="key">
+                  <div
+                    v-if="val && String(val).trim()"
+                    class="field-card" :class="{ 'field-card--streaming': activeDimension === 'daily_life' && activeField === key }">
+                    <div class="field-card__title">{{ dimKeyLabels[key] || key }}</div>
+                    <div class="field-card__content">{{ val }}<span v-if="activeDimension === 'daily_life' && activeField === key" class="streaming-cursor">▎</span></div>
+                  </div>
+                </template>
               </div>
             </template>
           </WizardSkeleton>

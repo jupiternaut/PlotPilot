@@ -7,7 +7,7 @@
           <n-tag size="small" round :bordered="false">Provider Control</n-tag>
         </div>
         <p class="llm-lead">
-          一个面板统一管理 <strong>OpenAI / Claude / Gemini</strong> 与所有
+          一个面板统一管理 <strong>OpenAI / Claude / Gemini / Codex</strong> 与所有
           <strong>OpenAI / Claude / Gemini 兼容网关</strong>。
           国产模型优先走 <strong>OpenAI 兼容</strong> 模式接入。
         </p>
@@ -144,12 +144,19 @@
               <n-select v-model:value="selectedProfile.protocol" :options="protocolOptions" />
             </div>
 
-            <div class="llm-field span-2">
+            <div v-if="selectedProfile.protocol === 'codex'" class="llm-field span-2">
+              <label class="llm-label">ChatGPT / Codex 登录</label>
+              <n-alert type="info" :show-icon="true">
+                此配置使用本机官方 codex app-server 登录态，不需要 API Key；可留空模型名，使用 Codex 默认模型。
+              </n-alert>
+            </div>
+
+            <div v-if="selectedProfile.protocol !== 'codex'" class="llm-field span-2">
               <label class="llm-label">Base URL</label>
               <n-input v-model:value="selectedProfile.base_url" placeholder="可填官方地址，也可填兼容网关地址" />
             </div>
 
-            <div class="llm-field span-2">
+            <div v-if="selectedProfile.protocol !== 'codex'" class="llm-field span-2">
               <label class="llm-label">API Key</label>
               <n-input
                 v-model:value="selectedProfile.api_key"
@@ -165,7 +172,7 @@
                 <n-auto-complete
                   v-model:value="selectedProfile.model"
                   :options="fetchedModelOptions"
-                  placeholder="填写所用网关文档中的模型 ID（本处不预设具体名称）"
+                  :placeholder="selectedProfile.protocol === 'codex' ? '可留空，使用 Codex 默认模型' : '填写所用网关文档中的模型 ID（本处不预设具体名称）'"
                   clearable
                   style="flex: 1"
                 />
@@ -173,7 +180,7 @@
                   secondary
                   size="small"
                   :loading="fetchingModels"
-                  :disabled="!selectedProfile.api_key"
+                  :disabled="selectedProfile.protocol === 'codex' || !selectedProfile.api_key"
                   @click="handleFetchModels"
                 >
                   拉取模型
@@ -296,6 +303,7 @@ const protocolOptions = [
   { label: 'Anthropic / Claude 兼容', value: 'anthropic' },
   { label: 'Gemini', value: 'gemini' },
   { label: 'Vertex AI / GCP', value: 'vertex-ai' },
+  { label: 'ChatGPT / Codex 登录', value: 'codex' },
 ]
 
 const presetOptions = computed(() =>
@@ -334,6 +342,10 @@ const fetchedModelOptions = computed(() =>
 
 async function handleFetchModels() {
   if (!selectedProfile.value) return
+  if (selectedProfile.value.protocol === 'codex') {
+    message.info('Codex 登录态不通过 /models 列表枚举；可留空模型名使用默认模型。')
+    return
+  }
   fetchingModels.value = true
   fetchedModels.value = []
   try {

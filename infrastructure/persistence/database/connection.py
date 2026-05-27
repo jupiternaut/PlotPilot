@@ -412,16 +412,16 @@ def _apply_migration_files_legacy(conn: sqlite3.Connection) -> None:
 
 
 def _fix_llm_profiles_protocol_check(conn: sqlite3.Connection) -> None:
-    """修复 llm_profiles 表的 CHECK 约束，确保包含 vertex-ai (SQLite 迁移方案)。"""
+    """修复 llm_profiles 表的 CHECK 约束，确保包含 vertex-ai/codex (SQLite 迁移方案)。"""
     cur = conn.execute("SELECT sql FROM sqlite_master WHERE name='llm_profiles'")
     row = cur.fetchone()
     if not row:
         return
     sql = row[0]
-    if "vertex-ai" in sql:
+    if "vertex-ai" in sql and "codex" in sql:
         return
 
-    logger.info("llm_profiles schema outdated (missing vertex-ai check). Recreating table...")
+    logger.info("llm_profiles schema outdated (missing vertex-ai/codex check). Recreating table...")
     # SQLite 迁移：重命名 -> 建新表 -> 导数据 -> 删旧表
     try:
         conn.execute("ALTER TABLE llm_profiles RENAME TO llm_profiles_old")
@@ -430,7 +430,7 @@ def _fix_llm_profiles_protocol_check(conn: sqlite3.Connection) -> None:
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL DEFAULT '',
                 preset_key TEXT NOT NULL DEFAULT 'custom-openai-compatible',
-                protocol TEXT NOT NULL DEFAULT 'openai' CHECK(protocol IN ('openai', 'anthropic', 'gemini', 'vertex-ai')),
+                protocol TEXT NOT NULL DEFAULT 'openai' CHECK(protocol IN ('openai', 'anthropic', 'gemini', 'vertex-ai', 'codex')),
                 base_url TEXT NOT NULL DEFAULT '',
                 api_key TEXT NOT NULL DEFAULT '',
                 model TEXT NOT NULL DEFAULT '',

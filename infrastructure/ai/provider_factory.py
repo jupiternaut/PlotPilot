@@ -8,6 +8,7 @@ from domain.ai.services.llm_service import GenerationConfig, GenerationResult, L
 from domain.ai.value_objects.prompt import Prompt
 from infrastructure.ai.config.settings import Settings
 from infrastructure.ai.providers.anthropic_provider import AnthropicProvider
+from infrastructure.ai.providers.codex_app_server_provider import CodexAppServerProvider
 from infrastructure.ai.providers.gemini_provider import GeminiProvider
 from infrastructure.ai.providers.mock_provider import MockProvider
 from infrastructure.ai.providers.openai_provider import OpenAIProvider
@@ -31,6 +32,9 @@ class LLMProviderFactory:
             return MockProvider()
 
         resolved = self.control_service.resolve_profile(profile)
+        if resolved.protocol == 'codex':
+            return CodexAppServerProvider(self._profile_to_settings(resolved))
+
         if not resolved.api_key.strip() or not resolved.model.strip():
             return MockProvider()
 
@@ -54,6 +58,8 @@ class LLMProviderFactory:
         elif profile.protocol == 'vertex-ai':
             # Vertex AI 的 URL 通常是动态生成的，但如果用户提供了自定义的 base_url，我们也保留它
             normalized_base_url = profile.base_url
+        elif profile.protocol == 'codex':
+            normalized_base_url = ''
         else:
             normalized_base_url = normalize_openai_base_url(profile.base_url)
 

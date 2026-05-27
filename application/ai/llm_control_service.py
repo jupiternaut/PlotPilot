@@ -17,7 +17,7 @@ from infrastructure.ai.url_utils import (
 
 logger = logging.getLogger(__name__)
 
-LLMProtocol = Literal['openai', 'anthropic', 'gemini', 'vertex-ai']
+LLMProtocol = Literal['openai', 'anthropic', 'gemini', 'vertex-ai', 'codex']
 
 
 class LLMPreset(BaseModel):
@@ -213,6 +213,15 @@ class LLMControlService:
                 tags=['official'],
             ),
             LLMPreset(
+                key='codex-app-server-chatgpt',
+                label='ChatGPT / Codex 登录（PoC）',
+                protocol='codex',
+                default_base_url='',
+                default_model='',
+                description='通过官方 codex app-server 使用本机 ChatGPT/Codex 登录态；不保存 OAuth token，也不等同于 OpenAI API Key。',
+                tags=['official', 'codex', 'poc'],
+            ),
+            LLMPreset(
                 key='deepseek',
                 label='DeepSeek',
                 protocol='openai',
@@ -387,6 +396,17 @@ class LLMControlService:
                 reason='未找到任何 LLM 配置',
             )
 
+        if profile.protocol == 'codex':
+            return LLMRuntimeSummary(
+                source='profile',
+                active_profile_id=profile.id,
+                active_profile_name=profile.name,
+                protocol=profile.protocol,
+                model=profile.model or 'Codex 默认模型',
+                base_url=None,
+                using_mock=False,
+            )
+
         if not profile.api_key.strip() or not profile.model.strip():
             return LLMRuntimeSummary(
                 source='mock',
@@ -415,7 +435,7 @@ class LLMControlService:
         llm_service_factory: Callable[[LLMProfile], LLMService],
     ) -> LLMTestResult:
         resolved = self.resolve_profile(profile)
-        if not resolved.api_key.strip() or not resolved.model.strip():
+        if resolved.protocol != 'codex' and (not resolved.api_key.strip() or not resolved.model.strip()):
             return LLMTestResult(
                 ok=False,
                 provider_label=resolved.name,
@@ -505,6 +525,8 @@ class LLMControlService:
             return normalize_anthropic_base_url(base_url) or ''
         if protocol == 'gemini':
             return normalize_gemini_base_url(base_url) or ''
+        if protocol == 'codex':
+            return ''
         return normalize_openai_base_url(base_url) or ''
 
     def _build_initial_config(self) -> LLMControlConfig:
@@ -540,6 +562,15 @@ class LLMControlService:
                 protocol='vertex-ai',
                 base_url='',
                 model='gemini-1.5-flash',
+            ),
+            LLMProfile(
+                id='codex-app-server-default',
+                name='ChatGPT / Codex 登录（PoC）',
+                preset_key='codex-app-server-chatgpt',
+                protocol='codex',
+                base_url='',
+                model='',
+                notes='通过官方 codex app-server 使用本机 ChatGPT/Codex 登录态；无需 API Key。',
             ),
         ]
         active_profile_id = profiles[0].id

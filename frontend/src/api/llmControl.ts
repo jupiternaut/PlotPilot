@@ -1,6 +1,6 @@
 import { apiClient } from './config'
 
-export type LLMProtocol = 'openai' | 'anthropic' | 'gemini' | 'vertex-ai'
+export type LLMProtocol = 'openai' | 'anthropic' | 'gemini' | 'vertex-ai' | 'codex'
 
 export interface LLMPreset {
   key: string
@@ -74,6 +74,20 @@ export interface ModelListResponse {
   count: number
 }
 
+export interface CodexStatusResponse {
+  available: boolean
+  authenticated: boolean
+  requires_openai_auth: boolean
+  email: string | null
+  plan_type: string | null
+  error: string | null
+}
+
+export interface CodexLoginStartResponse {
+  auth_url: string
+  login_id: string
+}
+
 export interface FetchModelsPayload {
   protocol: string
   base_url: string
@@ -89,6 +103,12 @@ export const llmControlApi = {
     apiClient.post<LLMTestResult>('/llm-control/test', profile, { timeout: 120_000 }) as Promise<LLMTestResult>,
   fetchModels: (payload: FetchModelsPayload) =>
     apiClient.post<ModelListResponse>('/llm-control/models', payload, { timeout: 30_000 }) as Promise<ModelListResponse>,
+  getCodexStatus: () =>
+    apiClient.get<CodexStatusResponse>('/llm-control/codex/status') as Promise<CodexStatusResponse>,
+  startCodexLogin: () =>
+    apiClient.post<CodexLoginStartResponse>('/llm-control/codex/login/start', {}) as Promise<CodexLoginStartResponse>,
+  logoutCodex: () =>
+    apiClient.post<{ ok: boolean }>('/llm-control/codex/logout', {}) as Promise<{ ok: boolean }>,
 }
 
 // ========== 提示词广场 API (Prompt Plaza) ==========
