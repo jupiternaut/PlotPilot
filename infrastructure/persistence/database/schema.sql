@@ -859,7 +859,7 @@ CREATE TABLE IF NOT EXISTS llm_profiles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL DEFAULT '',
     preset_key TEXT NOT NULL DEFAULT 'custom-openai-compatible',
-    protocol TEXT NOT NULL DEFAULT 'openai' CHECK(protocol IN ('openai', 'anthropic', 'gemini')),
+    protocol TEXT NOT NULL DEFAULT 'openai' CHECK(protocol IN ('openai', 'anthropic', 'gemini', 'codex')),
     base_url TEXT NOT NULL DEFAULT '',
     api_key TEXT NOT NULL DEFAULT '',
     model TEXT NOT NULL DEFAULT '',
@@ -908,5 +908,4 @@ CREATE INDEX IF NOT EXISTS idx_dag_versions_novel ON dag_versions(novel_id);
 CREATE INDEX IF NOT EXISTS idx_dag_versions_novel_version ON dag_versions(novel_id, version);
 -- 索引：按更新时间排序（用于清理旧版本）
 CREATE INDEX IF NOT EXISTS idx_dag_versions_updated_at ON dag_versions(novel_id, updated_at DESC);
-
 

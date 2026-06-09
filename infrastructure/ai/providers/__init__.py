@@ -24,3 +24,9 @@ try:
     __all__.append("GeminiProvider")
 except ModuleNotFoundError:
     GeminiProvider = None
+
+try:
+    from .codex_app_server_provider import CodexAppServerProvider
+    __all__.append("CodexAppServerProvider")
+except ModuleNotFoundError:
+    CodexAppServerProvider = None
