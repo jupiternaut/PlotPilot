@@ -1,5 +1,8 @@
-from application.ai.llm_control_service import LLMControlService, LLMProfile
-from domain.ai.services.llm_service import DEFAULT_MAX_OUTPUT_TOKENS
+import pytest
+
+from application.ai.llm_control_service import LLMControlConfig, LLMControlService, LLMProfile
+from domain.ai.services.llm_service import DEFAULT_MAX_OUTPUT_TOKENS, GenerationResult
+from domain.ai.value_objects.token_usage import TokenUsage
 from infrastructure.ai.llm_environment import ARK_DEFAULT_BASE_URL
 
 
@@ -107,3 +110,59 @@ def test_row_to_profile_preserves_max_tokens_above_global_floor():
     profile = LLMControlService()._row_to_profile(row)
 
     assert profile.max_tokens == DEFAULT_MAX_OUTPUT_TOKENS + 1000
+
+
+def test_codex_runtime_summary_does_not_require_api_key_or_model():
+    service = LLMControlService()
+    profile = LLMProfile(
+        id="codex",
+        name="Codex",
+        preset_key="codex-app-server-chatgpt",
+        protocol="codex",
+        api_key="",
+        model="",
+    )
+
+    summary = service.get_runtime_summary(
+        config=LLMControlConfig(active_profile_id=profile.id, profiles=[profile])
+    )
+
+    assert summary.source == "profile"
+    assert summary.using_mock is False
+    assert summary.model == "Codex 默认模型"
+
+
+@pytest.mark.asyncio
+async def test_codex_profile_test_skips_api_key_and_model_preflight():
+    service = LLMControlService()
+    captured = {}
+
+    class FakeLLMService:
+        async def generate(self, prompt, config):
+            captured["prompt"] = prompt
+            captured["config"] = config
+            return GenerationResult(
+                content="连接成功",
+                token_usage=TokenUsage(input_tokens=0, output_tokens=0),
+            )
+
+    def factory(profile):
+        captured["profile"] = profile
+        return FakeLLMService()
+
+    result = await service.test_profile_model(
+        LLMProfile(
+            id="codex",
+            name="Codex",
+            preset_key="codex-app-server-chatgpt",
+            protocol="codex",
+            api_key="",
+            model="",
+        ),
+        factory,
+    )
+
+    assert result.ok is True
+    assert captured["profile"].protocol == "codex"
+    assert captured["profile"].api_key == ""
+    assert captured["config"].model == ""

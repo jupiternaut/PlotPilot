@@ -174,4 +174,6 @@ data/
 !data/.gitkeep
 
 
-docs
+# ── 本地文档草稿默认忽略；PLM 移植 handoff 需要入库 ──
+docs/*
+!docs/PLM_WRITING_SPEC_HANDOFF.md

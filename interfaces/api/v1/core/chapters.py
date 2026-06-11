@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from application.core.services.chapter_service import ChapterService
@@ -27,6 +28,7 @@ from interfaces.api.dependencies import (
     get_chapter_ai_review_service,
 )
 from application.world.services.knowledge_service import KnowledgeService
+from application.writing_spec import WritingSpecValidator, load_project_writing_spec, load_writing_spec_by_id
 from infrastructure.persistence.database.chapter_draft_repository import ChapterDraftRepository
 from application.paths import get_db_path
 from domain.shared.exceptions import EntityNotFoundError
@@ -77,6 +79,11 @@ class ChapterMicroBeatsRequest(BaseModel):
 class UpdateChapterContentRequest(BaseModel):
     """更新章节内容请求"""
     content: str = Field(..., min_length=0, max_length=100000, description="章节内容")
+    writing_spec_id: Optional[str] = Field(
+        None,
+        max_length=120,
+        description="可选：保存前启用 WritingSpec 门禁；失败时拒绝写入",
+    )
     micro_beats: Optional[List[ChapterMicroBeatPayload]] = Field(
         None,
         description="可选：本章指挥器节拍快照；落库后侧栏「微观」以知识库为准",
@@ -276,6 +283,41 @@ async def update_chapter(
     knowledge_service: KnowledgeService = Depends(get_knowledge_service),
 ):
     """更新章节内容，保存成功后后台执行统一章后管线（见 ChapterAftermathPipeline）。"""
+    writing_spec = None
+    if request.writing_spec_id:
+        try:
+            writing_spec = load_writing_spec_by_id(request.writing_spec_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    else:
+        try:
+            writing_spec = load_project_writing_spec(novel_id, chapter_number)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    if writing_spec is not None:
+        report = WritingSpecValidator(writing_spec).validate(request.content)
+        if not report.passed:
+            detail = {
+                "code": "writing_spec_failed",
+                "message": "WritingSpec validation failed; chapter was not saved.",
+                "report": report.to_dict(),
+            }
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "success": False,
+                    "message": detail["message"],
+                    "code": detail["code"],
+                    "details": None,
+                    "detail": detail,
+                },
+            )
+
     try:
         chapter = service.update_chapter_by_novel_and_number(
             novel_id,

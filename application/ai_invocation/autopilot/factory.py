@@ -34,16 +34,17 @@ def _build_orchestrator(*, llm_service, publisher) -> AutopilotInvocationOrchest
     )
 
     db = get_database()
+    variable_repo = SqliteVariableHubRepository(db)
     return AutopilotInvocationOrchestrator(
         spec_service=InvocationSpecService(SqliteInvocationSpecRepository(db)),
-        variable_resolver=VariableResolver(SqliteVariableHubRepository(db)),
+        variable_resolver=VariableResolver(variable_repo),
         prompt_assembler=CPMSPromptAssembler(),
         llm_service=llm_service,
         publisher=publisher,
         session_service=InvocationSessionService(),
-        attempt_service=AttemptService(llm_service),
+        attempt_service=AttemptService(llm_service, variable_hub_repository=variable_repo),
         adoption_service=AdoptionService(),
-        commit_service=AdoptionCommitService(variable_hub_repository=SqliteVariableHubRepository(db)),
+        commit_service=AdoptionCommitService(variable_hub_repository=variable_repo),
         session_repository=SqliteInvocationSessionRepository(db),
         attempt_repository=SqliteInvocationAttemptRepository(db),
         adoption_repository=SqliteAdoptionRepository(db),

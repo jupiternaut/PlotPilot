@@ -9,6 +9,10 @@ from application.world.services.auto_bible_generator import AutoBibleGenerator
 from application.world.services.auto_knowledge_generator import AutoKnowledgeGenerator
 from application.core.dtos.novel_dto import NovelDTO
 from application.core.chapter_target_limits import CHAPTER_TARGET_WORDS_MAX, CHAPTER_TARGET_WORDS_MIN
+from application.ai_invocation.variable_hub import VariableWrite
+from application.writing_spec import load_writing_spec_by_id
+from infrastructure.persistence.database.connection import get_database
+from infrastructure.persistence.database.sqlite_ai_invocation_repository import SqliteVariableHubRepository
 from interfaces.api.dependencies import (
     get_novel_service,
     get_auto_bible_generator,
@@ -80,6 +84,42 @@ class UpdateAutoApproveRequest(BaseModel):
     auto_approve_mode: bool = Field(..., description="是否开启全自动模式（跳过所有人工审阅）")
 
 
+class WritingSpecBindingRequest(BaseModel):
+    """项目 WritingSpec 绑定请求"""
+    writing_spec_id: str = Field(
+        "",
+        max_length=120,
+        description="WritingSpec ID；传空字符串表示清空绑定",
+    )
+
+
+class WritingSpecBindingResponse(BaseModel):
+    """项目 WritingSpec 绑定响应"""
+    novel_id: str
+    writing_spec_id: str = ""
+    spec_title: str = ""
+    spec_version: str = ""
+    context_key: str
+
+
+class HumanizerSettingsRequest(BaseModel):
+    """项目 Humanizer 设置请求"""
+    enabled: bool = Field(False, description="是否在章节正文生成后、保存前执行 Humanizer")
+    revision_note: str = Field("", max_length=4000, description="本项目 Humanizer 专项润色要求")
+    failure_policy: Literal["fallback_original", "fail"] = Field(
+        "fallback_original",
+        description="Humanizer 或复审失败时，fallback_original=回退到润色前正文，fail=阻断本次生成",
+    )
+    temperature: float = Field(0.65, ge=0, le=2, description="Humanizer 温度")
+    max_tokens: Optional[int] = Field(None, gt=0, description="Humanizer 最大输出 token；空表示自动估算")
+
+
+class HumanizerSettingsResponse(HumanizerSettingsRequest):
+    """项目 Humanizer 设置响应"""
+    novel_id: str
+    context_key: str
+
+
 async def _generate_bible_background(
     novel_id: str,
     title: str,
@@ -111,6 +151,67 @@ async def _generate_bible_background(
         logger.info(f"Bible and Knowledge generated successfully for {novel_id}")
     except Exception as e:
         logger.error(f"Failed to generate Bible/Knowledge for {novel_id}: {e}")
+
+
+def _writing_spec_context_key(novel_id: str) -> str:
+    return f"novel_id:{novel_id}"
+
+
+def _novel_variable_context_key(novel_id: str) -> str:
+    return f"novel_id:{novel_id}"
+
+
+def _writing_spec_binding_response(novel_id: str, writing_spec_id: str) -> WritingSpecBindingResponse:
+    spec_title = ""
+    spec_version = ""
+    if writing_spec_id:
+        spec = load_writing_spec_by_id(writing_spec_id)
+        spec_title = spec.title
+        spec_version = spec.version
+    return WritingSpecBindingResponse(
+        novel_id=novel_id,
+        writing_spec_id=writing_spec_id,
+        spec_title=spec_title,
+        spec_version=spec_version,
+        context_key=_writing_spec_context_key(novel_id),
+    )
+
+
+def _humanizer_settings_response(novel_id: str, repo: SqliteVariableHubRepository) -> HumanizerSettingsResponse:
+    context_key = _novel_variable_context_key(novel_id)
+
+    def get_value(key: str, default: Any) -> Any:
+        value = repo.get_value(key, context_key)
+        return value.value if value is not None else default
+
+    def as_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return str(value or "").strip().lower() in {"1", "true", "yes", "on", "enabled", "开启", "是"}
+
+    failure_policy = str(get_value("novel.humanizer.failure_policy", "fallback_original"))
+    if failure_policy not in {"fallback_original", "fail"}:
+        failure_policy = "fallback_original"
+    max_tokens_raw = get_value("novel.humanizer.max_tokens", None)
+    try:
+        max_tokens = int(max_tokens_raw) if max_tokens_raw not in (None, "") else None
+    except (TypeError, ValueError):
+        max_tokens = None
+    try:
+        temperature = float(get_value("novel.humanizer.temperature", 0.65))
+    except (TypeError, ValueError):
+        temperature = 0.65
+    return HumanizerSettingsResponse(
+        novel_id=novel_id,
+        context_key=context_key,
+        enabled=as_bool(get_value("novel.humanizer.enabled", False)),
+        revision_note=str(get_value("novel.humanizer.revision_note", "") or ""),
+        failure_policy=failure_policy,  # type: ignore[arg-type]
+        temperature=max(0.0, min(2.0, temperature)),
+        max_tokens=max_tokens if max_tokens and max_tokens > 0 else None,
+    )
 
 
 # Routes
@@ -175,6 +276,107 @@ async def get_novel(
     if novel is None:
         raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
     return novel
+
+
+@router.get("/{novel_id}/writing-spec", response_model=WritingSpecBindingResponse)
+async def get_novel_writing_spec(
+    novel_id: str,
+    service: NovelService = Depends(get_novel_service),
+):
+    """读取项目默认 WritingSpec 绑定。"""
+    if service.get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    repo = SqliteVariableHubRepository(get_database())
+    value = repo.get_value("novel.writing_spec_id", _writing_spec_context_key(novel_id))
+    spec_id = str(value.value or "").strip() if value is not None else ""
+    try:
+        return _writing_spec_binding_response(novel_id, spec_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/{novel_id}/writing-spec", response_model=WritingSpecBindingResponse)
+async def set_novel_writing_spec(
+    novel_id: str,
+    request: WritingSpecBindingRequest,
+    service: NovelService = Depends(get_novel_service),
+):
+    """绑定项目默认 WritingSpec；生成管线会自动读取并执行。"""
+    if service.get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    spec_id = request.writing_spec_id.strip()
+    if spec_id:
+        try:
+            load_writing_spec_by_id(spec_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    repo = SqliteVariableHubRepository(get_database())
+    repo.set_value(
+        VariableWrite(
+            key="novel.writing_spec_id",
+            value=spec_id,
+            context_key=_writing_spec_context_key(novel_id),
+            source_trace_id="writing_spec_binding",
+            source_node_key="writing_spec_binding",
+            value_type="string",
+            display_name="项目 WritingSpec",
+            scope="novel",
+            stage="writing",
+        )
+    )
+    return _writing_spec_binding_response(novel_id, spec_id)
+
+
+@router.get("/{novel_id}/humanizer", response_model=HumanizerSettingsResponse)
+async def get_novel_humanizer_settings(
+    novel_id: str,
+    service: NovelService = Depends(get_novel_service),
+):
+    """读取项目 Humanizer 设置。"""
+    if service.get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    return _humanizer_settings_response(
+        novel_id,
+        SqliteVariableHubRepository(get_database()),
+    )
+
+
+@router.put("/{novel_id}/humanizer", response_model=HumanizerSettingsResponse)
+async def set_novel_humanizer_settings(
+    novel_id: str,
+    request: HumanizerSettingsRequest,
+    service: NovelService = Depends(get_novel_service),
+):
+    """设置项目 Humanizer；生成管线只在 enabled=true 时执行。"""
+    if service.get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail=f"Novel not found: {novel_id}")
+    repo = SqliteVariableHubRepository(get_database())
+    context_key = _novel_variable_context_key(novel_id)
+    values = {
+        "novel.humanizer.enabled": (request.enabled, "boolean", "Humanizer 开关"),
+        "novel.humanizer.revision_note": (request.revision_note.strip(), "string", "Humanizer 专项润色要求"),
+        "novel.humanizer.failure_policy": (request.failure_policy, "string", "Humanizer 失败策略"),
+        "novel.humanizer.temperature": (request.temperature, "float", "Humanizer 温度"),
+        "novel.humanizer.max_tokens": (request.max_tokens, "integer", "Humanizer 最大输出 token"),
+    }
+    for key, (value, value_type, display_name) in values.items():
+        repo.set_value(
+            VariableWrite(
+                key=key,
+                value=value,
+                context_key=context_key,
+                source_trace_id="humanizer_settings",
+                source_node_key="humanizer_settings",
+                value_type=value_type,
+                display_name=display_name,
+                scope="novel",
+                stage="writing",
+            )
+        )
+    return _humanizer_settings_response(novel_id, repo)
 
 
 @router.get("/", response_model=List[NovelDTO])

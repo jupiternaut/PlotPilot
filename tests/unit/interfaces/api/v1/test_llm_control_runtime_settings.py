@@ -33,6 +33,16 @@ workbench:
 
 
 @pytest.mark.asyncio
+async def test_list_models_returns_codex_default_without_api_key():
+    result = await llm_control.list_models(
+        ModelListRequest(protocol="codex", base_url="", api_key="")
+    )
+
+    assert result.count == 1
+    assert result.items[0].id == "codex-default"
+
+
+@pytest.mark.asyncio
 async def test_list_models_uses_configured_default_timeout(tmp_path, monkeypatch):
     config_path = tmp_path / "performance.yaml"
     config_path.write_text(

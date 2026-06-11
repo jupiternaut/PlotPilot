@@ -29,6 +29,13 @@ python scripts/backup_novel.py novel-1779868467739 novel-1799999999999
 **不会复制**：章节正文（已清空）、自动驾驶运行状态（已停止）。
 
 
+## PLM / Codex 写作入口
+
+- `plm_star_restart_prompt.py`：读取 `projects/star_restart/` 的 Bible、章节规划、风格准则和审稿清单，生成《星河重启》单章 PLM 提示；不调用模型，不写数据库。
+- `plm_homelander_100k_writer.py`：通过本机 Codex app-server provider 生成并持久化长篇草稿，同时刷新桌面 Markdown 总稿。
+- `humanize_chapter.py`：对文件或 PlotPilot 数据库中的章节执行 Humanizer 润色，可选择写回数据库，写回前会备份 SQLite。
+
+
 ## export_ai_traces.py
 
 导出 AI 调用链路追踪（Trace）为 Markdown 文件，包含每次 LLM 调用的完整 prompt、response、耗时、token 用量等。

@@ -532,8 +532,9 @@ class VariableResolver:
                         snapshot_values.get(alias, raw_aliases.get(alias, aliases[alias])),
                     )
 
-        for alias, value in aliases.items():
-            binding = binding_by_alias.get(alias)
+        for binding in bindings:
+            alias = binding.alias
+            value = aliases.get(alias)
             if self._is_runtime_only_binding(binding):
                 continue
             if alias not in resolved_from_hub:
@@ -544,7 +545,7 @@ class VariableResolver:
             definition = self._repository.get_definition(binding.variable_key) if binding and binding.variable_key else None
             snapshot_items.append(
                 self._snapshot_item(
-                    alias,
+                    self._snapshot_key(binding),
                     snapshot_value,
                     binding,
                     "variable_hub",
@@ -609,8 +610,8 @@ class VariableResolver:
             "display_name": display_name,
             "value": value,
             "type": VariableResolver._infer_type(value),
-            "scope": binding.scope if binding and binding.scope else VariableResolver._infer_scope(variable_key),
-            "stage": binding.stage if binding and binding.stage else VariableResolver._infer_stage(variable_key),
+            "scope": VariableResolver._snapshot_scope(binding, variable_key),
+            "stage": VariableResolver._snapshot_stage(binding, variable_key),
             "source": "variable_hub" if lineage == "variable_hub" else (binding.source if binding and binding.source else lineage),
             "variable_key": variable_key,
             "required": bool(binding.required) if binding else False,
@@ -618,6 +619,28 @@ class VariableResolver:
             "projection_key": binding.projection_key if binding else "",
             "render_mode": binding.render_mode if binding else "raw",
         }
+
+    @staticmethod
+    def _snapshot_key(binding: VariableBinding) -> str:
+        alias = str(binding.alias or "").strip()
+        variable_key = str(binding.variable_key or "").strip()
+        if alias == variable_key and alias.startswith("novel.setup."):
+            return alias.removeprefix("novel.setup.")
+        if alias == variable_key and alias.startswith("novel.") and alias.count(".") == 1:
+            return alias.removeprefix("novel.")
+        return alias
+
+    @staticmethod
+    def _snapshot_scope(binding: VariableBinding | None, variable_key: str) -> str:
+        if binding is not None and binding.scope and binding.scope != "runtime":
+            return binding.scope
+        return VariableResolver._infer_scope(variable_key)
+
+    @staticmethod
+    def _snapshot_stage(binding: VariableBinding | None, variable_key: str) -> str:
+        if binding is not None and binding.stage and binding.stage != "runtime":
+            return binding.stage
+        return VariableResolver._infer_stage(variable_key)
 
     @staticmethod
     def _resolution_item(

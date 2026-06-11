@@ -23,11 +23,25 @@ from application.ai_invocation.dtos import (
     prompt_hash,
     stable_hash,
 )
+from application.writing_spec import (
+    WritingSpecGateError,
+    apply_writing_spec_to_snapshot,
+    load_session_writing_spec,
+    persist_writing_spec_report,
+    validate_writing_spec_with_judge,
+)
+from application.ai_invocation.humanizer_runtime import (
+    HumanizerSettings,
+    load_session_humanizer_settings,
+    maybe_humanize_content,
+)
 from application.ai_invocation.output_binding_resolution import resolve_output_payload_value
 from domain.ai.value_objects.prompt import Prompt
 from application.ai_invocation.variable_hub import VariableHubRepository, VariableWrite
 
 logger = logging.getLogger(__name__)
+
+WRITING_SPEC_MAX_RETRIES = 2
 
 
 class InvocationSessionService:
@@ -73,9 +87,44 @@ class InvocationSessionService:
 class AttemptService:
     """创建 attempt 并统一调用 LLMService。"""
 
-    def __init__(self, llm_service: LLMService):
+    def __init__(
+        self,
+        llm_service: LLMService,
+        variable_hub_repository: VariableHubRepository | None = None,
+    ):
         self._llm_service = llm_service
+        self._variable_hub_repository = variable_hub_repository
         self._attempts: dict[str, InvocationAttempt] = {}
+
+    def _load_writing_spec(self, session: InvocationSession):
+        try:
+            return load_session_writing_spec(session)
+        except FileNotFoundError as exc:
+            raise ValueError(f"WritingSpec not found: {exc}") from exc
+        except ValueError as exc:
+            raise ValueError(f"Invalid WritingSpec binding: {exc}") from exc
+
+    def _load_humanizer_settings(self, session: InvocationSession) -> HumanizerSettings:
+        return load_session_humanizer_settings(session, self._variable_hub_repository)
+
+    async def _maybe_humanize_attempt(
+        self,
+        *,
+        session: InvocationSession,
+        attempt: InvocationAttempt,
+        writing_spec,
+        settings: HumanizerSettings,
+    ) -> None:
+        result = await maybe_humanize_content(
+            session=session,
+            content=attempt.content,
+            llm_service=self._llm_service,
+            writing_spec=writing_spec,
+            attempt_id=attempt.id,
+            settings=settings,
+            variable_hub_repository=self._variable_hub_repository,
+        )
+        attempt.content = result.content
 
     async def generate(
         self,
@@ -84,21 +133,70 @@ class AttemptService:
         prompt_snapshot: PromptSnapshot,
         config: GenerationConfig | None = None,
     ) -> InvocationAttempt:
+        writing_spec = self._load_writing_spec(session)
+        humanizer_settings = self._load_humanizer_settings(session)
+        base_snapshot = (
+            apply_writing_spec_to_snapshot(prompt_snapshot, writing_spec)
+            if writing_spec is not None
+            else prompt_snapshot
+        )
+        session.prompt_snapshot = base_snapshot
         attempt = InvocationAttempt(
             id=str(uuid.uuid4()),
             session_id=session.id,
             status=InvocationAttemptStatus.RUNNING,
-            prompt_snapshot=prompt_snapshot,
+            prompt_snapshot=base_snapshot,
         )
         self._attempts[attempt.id] = attempt
         session.attempts.append(attempt.id)
         session.status = InvocationSessionStatus.GENERATING
         try:
-            result = await self._llm_service.generate(prompt_snapshot.prompt, config or GenerationConfig())
-            attempt.content = result.content
-            attempt.token_usage = result.token_usage
-            attempt.status = InvocationAttemptStatus.SUCCEEDED
-            return attempt
+            current_snapshot = base_snapshot
+            last_report = None
+            max_rounds = WRITING_SPEC_MAX_RETRIES + 1 if writing_spec is not None else 1
+            for round_index in range(max_rounds):
+                attempt.prompt_snapshot = current_snapshot
+                result = await self._llm_service.generate(current_snapshot.prompt, config or GenerationConfig())
+                content = result.content
+                attempt.content = content
+                attempt.token_usage = result.token_usage
+                if writing_spec is None:
+                    await self._maybe_humanize_attempt(
+                        session=session,
+                        attempt=attempt,
+                        writing_spec=None,
+                        settings=humanizer_settings,
+                    )
+                    attempt.status = InvocationAttemptStatus.SUCCEEDED
+                    return attempt
+
+                report = await validate_writing_spec_with_judge(writing_spec, content, self._llm_service)
+                last_report = report
+                persist_writing_spec_report(
+                    session=session,
+                    report=report,
+                    attempt_id=attempt.id,
+                    status="passed" if report.passed else f"failed_round_{round_index + 1}",
+                )
+                if report.passed:
+                    await self._maybe_humanize_attempt(
+                        session=session,
+                        attempt=attempt,
+                        writing_spec=writing_spec,
+                        settings=humanizer_settings,
+                    )
+                    attempt.status = InvocationAttemptStatus.SUCCEEDED
+                    session.prompt_snapshot = current_snapshot
+                    return attempt
+                if round_index < max_rounds - 1:
+                    current_snapshot = apply_writing_spec_to_snapshot(
+                        prompt_snapshot,
+                        writing_spec,
+                        previous_content=content,
+                        previous_report=report,
+                    )
+
+            raise WritingSpecGateError(last_report)  # type: ignore[arg-type]
         except Exception as exc:
             attempt.status = InvocationAttemptStatus.FAILED
             attempt.error = str(exc)
@@ -113,37 +211,100 @@ class AttemptService:
         config: GenerationConfig | None = None,
         on_chunk: Callable[[str, str], None] | None = None,
     ) -> InvocationAttempt:
+        writing_spec = self._load_writing_spec(session)
+        humanizer_settings = self._load_humanizer_settings(session)
+        base_snapshot = (
+            apply_writing_spec_to_snapshot(prompt_snapshot, writing_spec)
+            if writing_spec is not None
+            else prompt_snapshot
+        )
+        session.prompt_snapshot = base_snapshot
         attempt = InvocationAttempt(
             id=str(uuid.uuid4()),
             session_id=session.id,
             status=InvocationAttemptStatus.RUNNING,
-            prompt_snapshot=prompt_snapshot,
+            prompt_snapshot=base_snapshot,
         )
         self._attempts[attempt.id] = attempt
         session.attempts.append(attempt.id)
         session.status = InvocationSessionStatus.GENERATING
-        content_parts: list[str] = []
         stopped = False
         try:
-            async for chunk in self._llm_service.stream_generate(prompt_snapshot.prompt, config or GenerationConfig()):
-                if not chunk:
-                    continue
-                content_parts.append(chunk)
+            current_snapshot = base_snapshot
+            last_report = None
+            max_rounds = WRITING_SPEC_MAX_RETRIES + 1 if writing_spec is not None else 1
+            live_stream_enabled = writing_spec is None and not humanizer_settings.enabled
+            for round_index in range(max_rounds):
+                content_parts: list[str] = []
+                attempt.prompt_snapshot = current_snapshot
+                async for chunk in self._llm_service.stream_generate(current_snapshot.prompt, config or GenerationConfig()):
+                    if not chunk:
+                        continue
+                    content_parts.append(chunk)
+                    attempt.content = "".join(content_parts)
+                    if live_stream_enabled and on_chunk is not None:
+                        keep_going = on_chunk(chunk, attempt.content)
+                        if keep_going is False:
+                            stopped = True
+                            break
                 attempt.content = "".join(content_parts)
-                if on_chunk is not None:
-                    keep_going = on_chunk(chunk, attempt.content)
-                    if keep_going is False:
-                        stopped = True
-                        break
-            attempt.content = "".join(content_parts)
-            attempt.token_usage = None
-            if stopped:
-                attempt.status = InvocationAttemptStatus.FAILED
-                attempt.error = "streaming stopped"
-                session.status = InvocationSessionStatus.CANCELLED
-            else:
-                attempt.status = InvocationAttemptStatus.SUCCEEDED
-            return attempt
+                attempt.token_usage = None
+                if stopped:
+                    attempt.status = InvocationAttemptStatus.FAILED
+                    attempt.error = "streaming stopped"
+                    session.status = InvocationSessionStatus.CANCELLED
+                    return attempt
+                if writing_spec is None:
+                    await self._maybe_humanize_attempt(
+                        session=session,
+                        attempt=attempt,
+                        writing_spec=None,
+                        settings=humanizer_settings,
+                    )
+                    if not live_stream_enabled and on_chunk is not None:
+                        keep_going = on_chunk(attempt.content, attempt.content)
+                        if keep_going is False:
+                            attempt.status = InvocationAttemptStatus.FAILED
+                            attempt.error = "streaming stopped"
+                            session.status = InvocationSessionStatus.CANCELLED
+                            return attempt
+                    attempt.status = InvocationAttemptStatus.SUCCEEDED
+                    return attempt
+
+                report = await validate_writing_spec_with_judge(writing_spec, attempt.content, self._llm_service)
+                last_report = report
+                persist_writing_spec_report(
+                    session=session,
+                    report=report,
+                    attempt_id=attempt.id,
+                    status="passed" if report.passed else f"failed_round_{round_index + 1}",
+                )
+                if report.passed:
+                    await self._maybe_humanize_attempt(
+                        session=session,
+                        attempt=attempt,
+                        writing_spec=writing_spec,
+                        settings=humanizer_settings,
+                    )
+                    if on_chunk is not None:
+                        keep_going = on_chunk(attempt.content, attempt.content)
+                        if keep_going is False:
+                            attempt.status = InvocationAttemptStatus.FAILED
+                            attempt.error = "streaming stopped"
+                            session.status = InvocationSessionStatus.CANCELLED
+                            return attempt
+                    attempt.status = InvocationAttemptStatus.SUCCEEDED
+                    session.prompt_snapshot = current_snapshot
+                    return attempt
+                if round_index < max_rounds - 1:
+                    current_snapshot = apply_writing_spec_to_snapshot(
+                        prompt_snapshot,
+                        writing_spec,
+                        previous_content=attempt.content,
+                        previous_report=report,
+                    )
+
+            raise WritingSpecGateError(last_report)  # type: ignore[arg-type]
         except Exception as exc:
             attempt.status = InvocationAttemptStatus.FAILED
             attempt.error = str(exc)

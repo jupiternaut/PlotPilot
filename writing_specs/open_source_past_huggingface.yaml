@@ -1,0 +1,311 @@
+id: open-source-past-huggingface
+title: 开源往事 Hugging Face 外篇 WritingSpec
+version: "0.1"
+threshold: 82
+description: >
+  用于约束《开源往事》Hugging Face 外篇。它必须把 Hugging Face 写成
+  AI 开源时代的历史基础设施，而不是把文章写成平台功能说明、行业评论或口语科普。
+core_question: "当模型共享进入平台时代，开源的公共广场如何同时成为新的权力入口？"
+meaning_contract: >
+  本篇必须续接《开源往事》的文明史叙事：从黑盒、源代码、自由软件、GitHub 的
+  旧开源秩序，推进到 Hugging Face、Transformers、Hub、model cards 和开源权重
+  构成的新秩序。结论不是简单赞美或批判 Hugging Face，而是说明：当模型、数据、
+  算力和可见性都依赖平台组织时，开放会获得更大传播力，也会产生新的俘获风险。
+
+required:
+  - id: open-source-past-continuity
+    description: "必须接住《开源往事》的黑盒/火种/代码文明史主轴"
+    min_hits: 4
+    weight: 18
+    terms:
+      - 黑盒
+      - 火种
+      - 源代码
+      - 开源
+      - 自由软件
+      - GitHub
+      - Linux
+      - Stallman
+
+  - id: huggingface-specific-history
+    description: "必须写出 Hugging Face 的具体历史入口，而不是泛泛说模型平台"
+    min_hits: 4
+    weight: 22
+    terms:
+      - Hugging Face
+      - 2016
+      - Clément
+      - Thomas Wolf
+      - Transformers
+      - 聊天机器人
+      - 自然语言处理
+      - 模型库
+
+  - id: hub-and-card-infrastructure
+    description: "必须说明 Hub/model cards/dataset cards 如何把模型发布制度化"
+    min_hits: 5
+    weight: 22
+    terms:
+      - Hub
+      - model card
+      - dataset card
+      - 模型卡
+      - 数据集卡
+      - 权重
+      - 数据集
+      - 仓库
+      - 复现
+      - 推理
+
+  - id: model-ecosystem-anchors
+    description: "必须把 Hugging Face 放进开源权重生态，而不是孤立写平台"
+    min_hits: 4
+    weight: 18
+    terms:
+      - Stable Diffusion
+      - LLaMA
+      - Mistral
+      - Qwen
+      - DeepSeek
+      - Meta
+      - Stability AI
+      - 开源权重
+
+  - id: platform-capture-axis
+    description: "必须从技术事实落到平台权力和可见性分配"
+    min_hits: 5
+    weight: 20
+    terms:
+      - 平台
+      - 公司
+      - 商业
+      - 可见性
+      - 推荐
+      - 默认入口
+      - API
+      - 托管
+      - 企业
+      - 权力
+      - 俘获
+
+meaning:
+  argument_steps:
+    - id: history-before-judgment
+      description: "判断必须先由历史节点推出，不能开头就贴平台批判标签"
+      min_hits: 5
+      weight: 20
+      terms:
+        - 最初
+        - 后来
+        - 2016
+        - 2019
+        - Transformers
+        - Hub
+        - model card
+        - Stable Diffusion
+        - LLaMA
+        - 2023
+
+    - id: model-is-not-code-mechanism
+      description: "必须解释模型不同于传统代码的权力边界"
+      min_hits: 5
+      weight: 20
+      terms:
+        - 权重
+        - 训练数据
+        - tokenizer
+        - 许可证
+        - 算力
+        - 推理服务
+        - 下载
+        - 微调
+        - 评测
+        - 复现
+
+    - id: causal-ladder
+      description: "必须有因果台阶，结论要从机制里长出来"
+      min_hits: 5
+      weight: 18
+      terms:
+        - 因为
+        - 于是
+        - 这意味着
+        - 问题在于
+        - 不是因为
+        - 而是因为
+        - 不是
+        - 而是
+        - 直到
+        - 结果
+
+reader:
+  requirements:
+    - id: reader-human-entry
+      description: "必须给外行读者人和场景入口，不能全是机构名和机制名"
+      min_hits: 3
+      weight: 14
+      terms:
+        - 研究者
+        - 开发者
+        - 学生
+        - 工程师
+        - 用户
+        - 维护者
+        - 团队
+        - 人们
+        - 普通人
+
+    - id: reader-explanation-ladder
+      description: "必须解释术语，不能把模型生态名词直接堆给读者"
+      min_hits: 4
+      weight: 14
+      terms:
+        - 也就是说
+        - 换句话说
+        - 这意味着
+        - 比如
+        - 简单说
+        - 首先
+        - 然后
+        - 问题在于
+        - 不是
+        - 而是
+
+  metrics:
+    - id: huggingface-jargon-density-limit
+      description: "模型生态术语不能密集堆墙，必须被叙事和解释稀释"
+      metric: term_density_per_1000
+      max: 42
+      severity: error
+      weight: 24
+      terms:
+        - Hugging Face
+        - Transformers
+        - Hub
+        - model card
+        - dataset card
+        - tokenizer
+        - pipeline
+        - API
+        - Spaces
+        - LLaMA
+        - Mistral
+        - Qwen
+        - DeepSeek
+        - Stable Diffusion
+        - 开源权重
+        - 权重
+        - 训练数据
+        - 推理服务
+        - 微调
+        - 评测
+
+forbidden:
+  - id: huggingface-plain-explainer-register
+    description: "禁止写成口语科普或功能说明文"
+    severity: error
+    weight: 34
+    patterns:
+      - 一句话：
+      - 这听起来是好事
+      - 不是首页那排最亮的卡片
+      - 你要做的，不是只相信平台的灯光一直亮着
+      - 我会说能，但前提很简单
+
+  - id: fictional-platform-case
+    description: "禁止为了好懂虚构平台案例替代真实历史链"
+    severity: error
+    weight: 30
+    patterns:
+      - 有一次，两个模型同时上线
+      - 我后来在一个小组里听到
+      - 有的实习生把一个课程项目做完后
+      - 一个是夜里两个人拼命修出来的社区模型
+
+  - id: binary-list-commentary
+    description: "禁止把章节写成二元对照式行业评论"
+    severity: warning
+    weight: 16
+    patterns:
+      - 一边是共享，一边是平台化
+      - 一边是技术进步，一边是资源集中
+      - 第一，它把企业用户的需求往里放
+      - 第二，它把“安全边界”写进接口
+
+  - id: generic-platform-column
+    description: "禁止滑成普通 AI 平台商业模式评论"
+    severity: warning
+    weight: 14
+    patterns:
+      - 商业模式
+      - 行业格局
+      - 产品矩阵
+      - 增长飞轮
+      - 用户心智
+      - 打造生态闭环
+
+metrics:
+  - id: enough-historical-breath
+    description: "外篇不能短到像备忘录，必须有历史推进的呼吸"
+    metric: paragraph_count
+    min: 16
+    severity: warning
+    weight: 8
+
+  - id: preserve-short-verdicts
+    description: "必须保留原文短句判词，但不能把全文写成碎句"
+    metric: short_sentence_ratio
+    min: 0.08
+    severity: warning
+    weight: 8
+
+  - id: not-academic-long-sentence
+    description: "句子不能论文长句化"
+    metric: avg_sentence_chars
+    max: 82
+    severity: warning
+    weight: 8
+
+style:
+  metrics:
+    - id: paragraph-breath-close-to-source
+      description: "段落平均长度应接近原文，不应变成大段解释文"
+      metric: avg_paragraph_chars
+      max: 285
+      severity: error
+      weight: 24
+
+    - id: not-fragmented-into-slogans
+      description: "短段落可以作为判词，不能连续碎句制造伪深刻"
+      metric: max_consecutive_short_paragraphs
+      max: 6
+      severity: error
+      weight: 24
+
+examples:
+  negative:
+    - id: negative-huggingface-plain-explainer
+      description: "刚才生成的 Hugging Face 口语科普稿：好读但缺少历史事实链和原文庄重叙事"
+      path: examples/open_source_past_huggingface/negative_plain_explainer.md
+      max_similarity: 0.26
+      severity: error
+      weight: 34
+
+judge:
+  enabled: true
+  id: open-source-past-huggingface-llm-judge
+  description: "判断候选稿是否真正把 Hugging Face 写进《开源往事》的代码文明史，而不是写成平台说明文"
+  min_score: 84
+  severity: error
+  weight: 30
+  checklist:
+    - "必须先有 Hugging Face / Transformers / Hub / model cards 等历史事实，再落到平台权力判断"
+    - "必须解释模型不同于代码：权重、数据、许可证、算力、推理服务共同构成新的边界"
+    - "必须保留《开源往事》的黑盒、火种、公共广场、俘获等叙事气质"
+    - "不能用虚构小案例代替真实历史链"
+    - "不能为了外行可读性把文章降格成口语科普"
+
+notes:
+  - "这是 Hugging Face 外篇专用规格，不替代通用 open-source-past。"
+  - "第一版只使用现有确定性 validator 能力：关键词锚点、禁用模式、指标和反例相似度。"
+  - "后续应加入 SourceSpec 结构字段和 style-analysis 统计基线，而不是长期依赖关键词。"

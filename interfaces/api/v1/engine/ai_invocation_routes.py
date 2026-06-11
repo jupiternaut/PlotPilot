@@ -796,7 +796,7 @@ async def create_invocation(request: InvocationCreateRequest) -> dict[str, Any]:
         prompt_assembler=CPMSPromptAssembler(),
         llm_service=llm_service,
         session_service=InvocationSessionService(),
-        attempt_service=AttemptService(llm_service),
+        attempt_service=AttemptService(llm_service, variable_hub_repository=repos["variable_hub"]),
         adoption_service=AdoptionService(),
         commit_service=AdoptionCommitService(variable_hub_repository=repos["variable_hub"]),
     )

@@ -518,7 +518,10 @@ async def _create_bible_setup_invocation(
         prompt_assembler=BibleSetupPromptAssembler(),
         llm_service=bible_generator.llm_service,
         session_service=InvocationSessionService(),
-        attempt_service=AttemptService(bible_generator.llm_service),
+        attempt_service=AttemptService(
+            bible_generator.llm_service,
+            variable_hub_repository=repos["variable_hub"],
+        ),
         adoption_service=AdoptionService(),
         commit_service=AdoptionCommitService(variable_hub_repository=repos["variable_hub"]),
     )

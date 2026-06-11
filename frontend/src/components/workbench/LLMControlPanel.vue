@@ -7,7 +7,7 @@
           <n-tag size="small" round :bordered="false">Provider Control</n-tag>
         </div>
         <p class="llm-lead">
-          一个面板统一管理 <strong>OpenAI / Claude / Gemini</strong> 与所有
+          一个面板统一管理 <strong>OpenAI / Claude / Gemini / Codex</strong> 与所有
           <strong>OpenAI / Claude / Gemini 兼容网关</strong>。
           国产模型优先走 <strong>OpenAI 兼容</strong> 模式接入。
         </p>
@@ -31,6 +31,17 @@
 
     <n-alert v-if="panelData?.runtime?.using_mock" type="warning" :show-icon="true" class="llm-alert">
       {{ panelData?.runtime?.reason || '当前未配置可用模型，运行时会退回 MockProvider。' }}
+    </n-alert>
+
+    <n-alert v-if="isCodexProfile" type="info" :show-icon="false" class="llm-alert">
+      <div class="codex-status-row">
+        <span>ChatGPT / Codex 登录态：{{ codexStatusLabel }}</span>
+        <n-space :size="8">
+          <n-button size="tiny" secondary :loading="codexLoading" @click="refreshCodexStatus">刷新状态</n-button>
+          <n-button size="tiny" type="primary" ghost :loading="codexLoading" @click="startCodexLogin">连接 ChatGPT/Codex</n-button>
+          <n-button size="tiny" secondary :disabled="!codexStatus?.authenticated" :loading="codexLoading" @click="logoutCodex">退出</n-button>
+        </n-space>
+      </div>
     </n-alert>
 
     <section v-if="panelData && quickImportPresets.length" class="llm-preset-strip">
@@ -144,12 +155,12 @@
               <n-select v-model:value="selectedProfile.protocol" :options="protocolOptions" />
             </div>
 
-            <div class="llm-field span-2">
+            <div v-if="selectedProfile.protocol !== 'codex'" class="llm-field span-2">
               <label class="llm-label">Base URL</label>
               <n-input v-model:value="selectedProfile.base_url" placeholder="可填官方地址，也可填兼容网关地址" />
             </div>
 
-            <div class="llm-field span-2">
+            <div v-if="selectedProfile.protocol !== 'codex'" class="llm-field span-2">
               <label class="llm-label">API Key</label>
               <n-input
                 v-model:value="selectedProfile.api_key"
@@ -165,7 +176,7 @@
                 <n-auto-complete
                   v-model:value="selectedProfile.model"
                   :options="fetchedModelOptions"
-                  placeholder="填写所用网关文档中的模型 ID（本处不预设具体名称）"
+                  :placeholder="selectedProfile.protocol === 'codex' ? '可留空，使用 Codex 默认模型' : '填写所用网关文档中的模型 ID（本处不预设具体名称）'"
                   clearable
                   style="flex: 1"
                 />
@@ -173,7 +184,7 @@
                   secondary
                   size="small"
                   :loading="fetchingModels"
-                  :disabled="!selectedProfile.api_key"
+                  :disabled="selectedProfile.protocol !== 'codex' && !selectedProfile.api_key"
                   @click="handleFetchModels"
                 >
                   拉取模型
@@ -249,6 +260,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   llmControlApi,
+  type CodexStatusResponse,
   type LLMControlConfig,
   type LLMControlPanelData,
   type LLMPreset,
@@ -286,6 +298,8 @@ const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const fetchingModels = ref(false)
+const codexLoading = ref(false)
+const codexStatus = ref<CodexStatusResponse | null>(null)
 const fetchedModels = ref<ModelItem[]>([])
 const selectedProfileId = ref('')
 const extraHeadersText = ref('{}')
@@ -298,6 +312,7 @@ const protocolOptions = [
   { label: 'OpenAI 兼容', value: 'openai' },
   { label: 'Anthropic / Claude 兼容', value: 'anthropic' },
   { label: 'Gemini', value: 'gemini' },
+  { label: 'ChatGPT / Codex 登录', value: 'codex' },
 ]
 
 const presetOptions = computed(() =>
@@ -334,8 +349,26 @@ const fetchedModelOptions = computed(() =>
   }))
 )
 
+const isCodexProfile = computed(() => selectedProfile.value?.protocol === 'codex')
+
+const codexStatusLabel = computed(() => {
+  const status = codexStatus.value
+  if (!status) return '未检查'
+  if (!status.available) return status.error || '未找到 codex CLI'
+  if (status.authenticated) {
+    const account = status.email ? `（${status.email}${status.plan_type ? ` · ${status.plan_type}` : ''}）` : ''
+    return `已连接${account}`
+  }
+  return status.error || '未登录'
+})
+
 async function handleFetchModels() {
   if (!selectedProfile.value) return
+  if (selectedProfile.value.protocol === 'codex') {
+    fetchedModels.value = []
+    message.info('Codex 登录态不通过 /models 列表枚举；可留空模型名使用默认模型。')
+    return
+  }
   fetchingModels.value = true
   fetchedModels.value = []
   try {
@@ -475,6 +508,7 @@ function normalizePanelData(raw: unknown): LLMControlPanelData {
   const config: LLMControlConfig = {
     version: typeof cfgObj.version === 'number' ? cfgObj.version : 1,
     active_profile_id: activeId,
+    endpoint_mode: cfgObj.endpoint_mode === 'independent' ? 'independent' : 'unified',
     profiles,
   }
 
@@ -543,6 +577,9 @@ async function loadPanel() {
     selectedProfileId.value = candidateId
     syncJsonEditors()
     emit('panel-updated', deepClone(data))
+    if (data.config.profiles.some((profile) => profile.protocol === 'codex')) {
+      void refreshCodexStatus()
+    }
     await nextTick()
     restoreUiState()
   } catch (error) {
@@ -622,6 +659,10 @@ function applyPresetToSelected() {
   selectedProfile.value.protocol = preset.protocol
   if (preset.default_base_url) selectedProfile.value.base_url = preset.default_base_url
   if (preset.default_model) selectedProfile.value.model = preset.default_model
+  if (preset.protocol === 'codex') {
+    selectedProfile.value.base_url = ''
+    selectedProfile.value.api_key = ''
+  }
   if (!selectedProfile.value.name || selectedProfile.value.name === '新配置') {
     selectedProfile.value.name = preset.label
   }
@@ -657,6 +698,50 @@ async function saveAll() {
     message.error(`保存失败：${detail}`)
   } finally {
     saving.value = false
+  }
+}
+
+async function refreshCodexStatus() {
+  codexLoading.value = true
+  try {
+    codexStatus.value = await llmControlApi.getCodexStatus()
+  } catch (error) {
+    codexStatus.value = {
+      available: false,
+      authenticated: false,
+      requires_openai_auth: false,
+      email: null,
+      plan_type: null,
+      error: formatApiError(error, 'Codex 状态检查失败'),
+    }
+  } finally {
+    codexLoading.value = false
+  }
+}
+
+async function startCodexLogin() {
+  codexLoading.value = true
+  try {
+    const payload = await llmControlApi.startCodexLogin()
+    globalThis.open(payload.auth_url, '_blank', 'noopener,noreferrer')
+    message.info('已打开 ChatGPT/Codex 授权页面，完成后点“刷新状态”。')
+  } catch (error) {
+    message.error(`Codex 登录启动失败：${formatApiError(error, '启动失败')}`)
+  } finally {
+    codexLoading.value = false
+  }
+}
+
+async function logoutCodex() {
+  codexLoading.value = true
+  try {
+    await llmControlApi.logoutCodex()
+    await refreshCodexStatus()
+    message.success('已退出 Codex 登录态')
+  } catch (error) {
+    message.error(`Codex 退出失败：${formatApiError(error, '退出失败')}`)
+  } finally {
+    codexLoading.value = false
   }
 }
 
@@ -754,6 +839,13 @@ onBeforeUnmount(() => {
 .llm-alert {
   margin: 0 18px 12px;
   flex-shrink: 0;
+}
+
+.codex-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .llm-preset-strip {

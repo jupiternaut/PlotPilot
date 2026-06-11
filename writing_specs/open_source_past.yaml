@@ -1,0 +1,362 @@
+id: open-source-past
+title: 开源往事 WritingSpec
+version: "0.3"
+threshold: 80
+description: >
+  用于约束《开源往事》续写的轻量写作契约。它不只检查表层文风，
+  还检查生成文本是否仍服务于“代码文明的流亡与归乡史”。
+core_question: "人类共享知识如何从黑盒中流亡，又如何在归乡后被重新俘获？"
+meaning_contract: >
+  本文不是解释“开源为什么赢了”的普通技术评论，也不是 AI 编程工具观察。
+  它必须续写原文的代码文明史：开放代码从黑盒中夺回知识，又在胜利后被平台、
+  云、资本、默认入口和账号体系重新俘获。文本的寒意来自“胜利并未带来自由”
+  这一结构性反讽，而不是来自虚构人物小剧情。
+
+required:
+  - id: exile-and-return-axis
+    description: "必须保留流亡/归乡/火种/黑盒的历史主轴"
+    min_hits: 4
+    weight: 18
+    terms:
+      - 流亡
+      - 归乡
+      - 火种
+      - 黑盒
+      - 城墙
+      - 群星
+      - 共享知识
+
+  - id: code-civilization-frame
+    description: "必须仍然是代码文明史，而不是泛科技评论"
+    min_hits: 4
+    weight: 16
+    terms:
+      - 源代码
+      - 代码
+      - 软件
+      - 计算机
+      - 开源
+      - 自由软件
+      - 互联网
+
+  - id: historical-continuity
+    description: "必须接住原文历史连续性，不允许只写当下观点"
+    min_hits: 2
+    weight: 14
+    terms:
+      - Stallman
+      - Torvalds
+      - GNU
+      - Linux
+      - Apache
+      - GitHub
+      - Hugging Face
+
+  - id: power-and-capture
+    description: "必须把技术事实落到权力结构，而不是只解释工具"
+    min_hits: 5
+    weight: 18
+    terms:
+      - 权力
+      - 帝国
+      - 公司
+      - 商业
+      - 平台
+      - 云
+      - 封闭
+      - 开放
+      - 俘获
+      - 金库
+
+  - id: unresolved-choice
+    description: "结尾必须回到开放性仍由活人选择重写"
+    min_hits: 3
+    weight: 12
+    terms:
+      - 选择
+      - 未完成
+      - 每一个人
+      - 活人
+      - 继续
+      - 仍然
+      - 火种
+
+meaning:
+  argument_steps:
+    - id: historical-event-causality
+      description: "必须有历史事件或机制承重，不能只用专名刷存在感"
+      min_hits: 4
+      weight: 22
+      terms:
+        - ENIAC
+        - ARPANET
+        - IBM
+        - MIT
+        - PDP-10
+        - Usenet
+        - GPL
+        - 许可证
+        - 反垄断
+        - 基金会
+        - 云厂商
+        - 托管服务
+        - 分发入口
+        - 账号体系
+        - 默认选项
+        - 排名
+
+    - id: mechanism-over-label
+      description: "必须解释机制如何发生，而不是堆叠抽象标签"
+      min_hits: 4
+      weight: 20
+      terms:
+        - 因为
+        - 于是
+        - 一旦
+        - 这意味着
+        - 不是因为
+        - 而是因为
+        - 不是
+        - 而是
+        - 首先
+        - 然后
+        - 直到
+        - 结果
+
+    - id: narrative-specificity
+      description: "必须出现能被读者复述的具体历史/制度对象"
+      min_hits: 5
+      weight: 18
+      terms:
+        - 实验室
+        - 合同
+        - 律师
+        - 授权
+        - 服务器
+        - 数据库
+        - 容器
+        - 控制台
+        - 账单
+        - API
+        - 搜索排序
+        - 企业采购
+        - 用户关系
+        - 网络效应
+
+reader:
+  requirements:
+    - id: reader-human-entry
+      description: "必须给外行读者一个人的入口，不能全是机构、协议、平台和抽象判断"
+      min_hits: 2
+      weight: 14
+      terms:
+        - 人
+        - 人们
+        - 用户
+        - 开发者
+        - 工程师
+        - 维护者
+        - 学生
+        - 普通人
+        - 活人
+        - 母亲
+        - 孩子
+        - 老人
+        - 路人
+
+    - id: reader-explanation-ladder
+      description: "必须有解释台阶，不能把判断直接砸给读者"
+      min_hits: 3
+      weight: 14
+      terms:
+        - 因为
+        - 所以
+        - 于是
+        - 这意味着
+        - 换句话说
+        - 也就是说
+        - 比如
+        - 首先
+        - 然后
+        - 不是
+        - 而是
+        - 问题在于
+
+  metrics:
+    - id: reader-ai-war-jargon-density-limit
+      description: "AI/军工/治理术语不能密集堆叠到外行无法进入"
+      metric: term_density_per_1000
+      max: 18
+      severity: error
+      weight: 26
+      terms:
+        - Anthropic
+        - OpenAI
+        - Claude
+        - Palantir
+        - AWS
+        - classified
+        - mission
+        - workflows
+        - intelligence
+        - analysis
+        - modeling
+        - simulation
+        - operational
+        - planning
+        - cyber
+        - operations
+        - system card
+        - alignment
+        - national security
+        - responsible deployment
+        - public sector
+        - AI
+        - 模型
+        - 训练数据
+        - 评测体系
+        - 部署通道
+        - 反馈回路
+        - 政府合同
+        - 国防
+        - 情报
+        - 军方
+        - 网络行动
+        - 军事模拟
+        - 战前预警
+        - 战争机器
+        - 平民
+        - 风险
+
+forbidden:
+  - id: fictional-maintainer-scene
+    description: "禁止把史论续章改成虚构维护者小小说"
+    severity: error
+    weight: 35
+    patterns:
+      - Merge 按钮
+      - 年轻贡献者
+      - 坐在出租屋
+      - CI 页面
+      - 它自己修好了
+      - 测试全绿
+
+  - id: ai-tool-column-drift
+    description: "禁止把中心论题缩窄成 AI 编程工具评论"
+    severity: warning
+    weight: 12
+    patterns:
+      - AI 编程助手
+      - 云端 IDE
+      - 自动补全
+      - commit message
+      - API 调用
+
+  - id: generic-essay-register
+    description: "禁止明显论文腔/公众号总结腔"
+    severity: warning
+    weight: 10
+    patterns:
+      - 值得注意的是
+      - 综上所述
+      - 由此可见
+      - 本文认为
+      - 赋能
+      - 打造闭环
+
+  - id: slogan-fragment-run
+    description: "禁止把文章写成一行一行的抽象口号"
+    severity: error
+    weight: 28
+    patterns:
+      - "regex:(?:^.{1,12}[。！?？]?\\n\\n){10,}"
+
+metrics:
+  - id: enough-paragraph-breath
+    description: "原文依赖大量短段落形成冷峻节奏"
+    metric: paragraph_count
+    min: 24
+    severity: warning
+    weight: 8
+
+  - id: short-sentence-presence
+    description: "必须保留短句断言的节奏"
+    metric: short_sentence_ratio
+    min: 0.14
+    severity: warning
+    weight: 8
+
+  - id: not-too-dense
+    description: "句子不能过度论文长句化"
+    metric: avg_sentence_chars
+    max: 72
+    severity: warning
+    weight: 8
+
+style:
+  metrics:
+    - id: paragraph-breath-not-fragmented
+      description: "不能把原文短句节奏误写成大量碎句口号"
+      metric: avg_paragraph_chars
+      min: 35
+      severity: error
+      weight: 24
+
+    - id: short-paragraph-ratio-limit
+      description: "短段落可以出现，但不能成为主体"
+      metric: short_paragraph_ratio
+      max: 0.6
+      severity: error
+      weight: 22
+
+    - id: consecutive-short-paragraph-limit
+      description: "禁止连续碎句排比制造伪深刻"
+      metric: max_consecutive_short_paragraphs
+      max: 8
+      severity: error
+      weight: 24
+
+    - id: motif-density-limit
+      description: "禁止用黑盒/归乡/火种/城墙等主题词刷分"
+      metric: term_density_per_1000
+      max: 19
+      severity: error
+      weight: 28
+      terms:
+        - 黑盒
+        - 归乡
+        - 火种
+        - 城墙
+        - 平台
+        - 默认
+        - 帝国
+        - 俘获
+
+examples:
+  negative:
+    - id: negative-default-entrance-generated
+      description: "刚才生成的《默认入口》废稿：主题词刷分、碎句口号、缺少历史叙事承重"
+      path: examples/open_source_past/negative_default_entrance_generated.md
+      max_similarity: 0.28
+      severity: error
+      weight: 35
+
+judge:
+  enabled: true
+  id: open-source-past-llm-judge
+  description: "判断候选稿是否真正延续《开源往事》的论证，而不是只复用主题词和姿态"
+  min_score: 82
+  severity: error
+  weight: 30
+  checklist:
+    - "中心论题必须仍是代码文明从黑盒流亡、归乡后又被平台/云/默认入口重新俘获"
+    - "至少要能复述出一条历史或制度因果链，不能只是说开源赢了或开放被俘获"
+    - "技术事实必须服务于权力结构判断，不能滑成 AI 编程助手、效率工具或泛科技评论"
+    - "短句可以存在，但不能用碎句口号替代论证"
+    - "结尾必须保留未完成的选择感，而不是给出公众号式总结"
+
+notes:
+  - "v2 增加 MeaningSpec、StyleSpec 与 ExampleBank；关键词命中不再等于通过。"
+  - "v3 增加 ReaderSpec；锋利表达必须给外行读者解释台阶，禁止 AI/军工/治理术语密集堆墙。"
+  - "LLM Judge 只在确定性规则先通过后执行，失败原因会进入自动返工 prompt。"
+  - "通过不代表文学质量足够，只代表没有触发基础偏题/文风漂移。"
